@@ -48,7 +48,10 @@ public enum Emoji {
     VERIFIED_BLUE("<:verified_blue:1394823343039054035>"),
     VERIFIED_GREEN("<:verified_green:1394823965267988533>"),
     LIKE("<:like:1394824135233900646>"),
-    DISLIKE("<:dislike:1394824156503343295>")
+    DISLIKE("<:dislike:1394824156503343295>"),
+    CONFETTI("<:confetti:1394825659989360640>"),
+    TROPHY("<a:trophy:1394827645375484015>"),
+    GAMES("<:games:1394827847444467752>")
     ;
 
     public final String id;

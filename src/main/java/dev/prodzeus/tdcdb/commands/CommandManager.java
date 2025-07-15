@@ -1,6 +1,6 @@
 package dev.prodzeus.tdcdb.commands;
 
-import dev.prodzeus.tdcdb.enums.Bot;
+import dev.prodzeus.tdcdb.bot.Bot;
 import lombok.Getter;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;

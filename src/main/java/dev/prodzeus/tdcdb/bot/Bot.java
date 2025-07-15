@@ -1,6 +1,5 @@
-package dev.prodzeus.tdcdb.enums;
+package dev.prodzeus.tdcdb.bot;
 
-import dev.prodzeus.tdcdb.Configuration;
 import dev.prodzeus.tdcdb.commands.CommandListener;
 import dev.prodzeus.tdcdb.commands.CommandManager;
 import net.dv8tion.jda.api.JDA;

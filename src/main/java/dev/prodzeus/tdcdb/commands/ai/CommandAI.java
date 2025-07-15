@@ -1,7 +1,7 @@
 package dev.prodzeus.tdcdb.commands.ai;
 
 import com.google.genai.Client;
-import dev.prodzeus.tdcdb.Configuration;
+import dev.prodzeus.tdcdb.bot.Configuration;
 import dev.prodzeus.tdcdb.commands.ACommand;
 import dev.prodzeus.tdcdb.commands.CommandBase;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;

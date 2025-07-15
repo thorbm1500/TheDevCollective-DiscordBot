@@ -1,4 +1,4 @@
-package dev.prodzeus.tdcdb;
+package dev.prodzeus.tdcdb.bot;
 
 import lombok.Getter;
 import lombok.NonNull;
