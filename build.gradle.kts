@@ -16,6 +16,7 @@ dependencies {
         exclude(module = "opus-java")
         exclude(module = "tink")
     }
+    implementation("com.google.genai:google-genai:1.8.0")
     implementation("commons-cli:commons-cli:1.9.0")
     compileOnly("org.projectlombok:lombok:1.18.38")
     annotationProcessor("org.projectlombok:lombok:1.18.38")
