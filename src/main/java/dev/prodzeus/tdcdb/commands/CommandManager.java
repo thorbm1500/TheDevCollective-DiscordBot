@@ -31,11 +31,10 @@ public class CommandManager {
                 .toArray(CommandBase[]::new);
     }
 
-    private void setupCommands() {
+    public void setupCommands() {
         var cmds = Bot.INSTANCE.jda.updateCommands();
 
-        Arrays.stream(commands).forEach(cmd -> {
-            cmds.addCommands(cmd.initialize());
-        });
+        Arrays.stream(commands).forEach(cmd -> cmds.addCommands(cmd.initialize()));
+        cmds.queue();
     }
 }

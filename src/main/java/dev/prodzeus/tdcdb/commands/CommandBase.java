@@ -1,6 +1,7 @@
 package dev.prodzeus.tdcdb.commands;
 
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.interactions.InteractionContextType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 
@@ -9,7 +10,7 @@ public abstract class CommandBase {
     public String description;
 
     public SlashCommandData initialize() {
-        var cmd = Commands.slash(name, description);
+        var cmd = Commands.slash(name, description).setContexts(InteractionContextType.GUILD);
         configure(cmd);
         return cmd;
     }

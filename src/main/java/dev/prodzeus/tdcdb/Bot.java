@@ -18,4 +18,8 @@ public enum Bot {
 
         commandManager = new CommandManager();
     }
+
+    public void initialize() {
+        commandManager.setupCommands();
+    }
 }

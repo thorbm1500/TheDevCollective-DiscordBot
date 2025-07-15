@@ -10,5 +10,5 @@ import java.lang.annotation.Target;
 public @interface ACommand {
     String value();
 
-    String description() default "";
+    String description() default "Command";
 }
