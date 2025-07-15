@@ -1,5 +1,6 @@
-package dev.prodzeus.tdcdb;
+package dev.prodzeus.tdcdb.enums;
 
+import dev.prodzeus.tdcdb.Configuration;
 import dev.prodzeus.tdcdb.commands.CommandListener;
 import dev.prodzeus.tdcdb.commands.CommandManager;
 import net.dv8tion.jda.api.JDA;
@@ -11,7 +12,7 @@ public enum Bot {
     public final JDA jda;
     public final CommandManager commandManager;
 
-    private Bot() {
+    Bot() {
         jda = JDABuilder.createDefault(Configuration.getToken().get())
                 .addEventListeners(new CommandListener())
                 .build();
