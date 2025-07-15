@@ -12,7 +12,7 @@ public enum Bot {
     public final CommandManager commandManager;
 
     private Bot() {
-        jda = JDABuilder.createDefault(Configuration.getToken())
+        jda = JDABuilder.createDefault(Configuration.getToken().get())
                 .addEventListeners(new CommandListener())
                 .build();
 
