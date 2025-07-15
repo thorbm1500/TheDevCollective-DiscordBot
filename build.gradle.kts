@@ -7,9 +7,11 @@ version = "0.1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
+    maven("https://jitpack.io")
 }
 
 dependencies {
+    implementation("com.github.thorbm1500:UtilityLib:e8fbf74")
     implementation("net.dv8tion:JDA:${project.properties["jda_version"]}") {
         exclude(module = "opus-java")
         exclude(module = "tink")
