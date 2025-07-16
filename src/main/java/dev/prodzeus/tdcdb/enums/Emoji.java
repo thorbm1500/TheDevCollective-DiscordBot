@@ -41,7 +41,8 @@ public enum Emoji {
     YOUTUBE_LOGO("<:youtube:1394821153683669142>"),
     GITHUB_LOGO("<:github:1394821242611175527>"),
     TELEGRAM_LOGO_WHITE("<:telegram_white:1394821300136185886>"),
-    PURPLE_MOD_SHIELD("<:purple_moderator_shield:1394821842790912010>"),
+    MOD_SHIELD_BLUE("<:moderator_shield_blue:1394830032731504762>"),
+    MOD_SHIELD_PURPLE("<:moderator_shield_purple:1394821842790912010>"),
     MUTE("<:mute:1394822754896711720>"),
     DEAFEN("<a:deafen:1394822639486500948>"),
     CROWN("<:crown:1394822926569574490>"),
@@ -51,7 +52,17 @@ public enum Emoji {
     DISLIKE("<:dislike:1394824156503343295>"),
     CONFETTI("<:confetti:1394825659989360640>"),
     TROPHY("<a:trophy:1394827645375484015>"),
-    GAMES("<:games:1394827847444467752>")
+    GAMES("<:games:1394827847444467752>"),
+    BACKPACK("<:backpack:1394831441082449991>"),
+    SUBSCRIPTION("<:subscription:1394831554424864808>"),
+    STICKER_EARLY_SUPPORTER("<:sticker_early_supporter:1394830539407757332>"),
+    STICKER_NITRO("<:sticker_nitro:1394831672410898574>"),
+    STICKER_SUBSCRIBER("<:sticker_subscriber:1394831933216784465>"),
+    STICKER_WUMPUS("<:sticker_wumpus:1394832052838469764>"),
+    PLUS("<:plus:1394835415240020161>"),
+    MINUS("<:minus:1394835318548725790>"),
+    EXCLAMATION("<a:exclamation:1394836274677944340>"),
+    WAVE("<a:wave:1394839102242951248>")
     ;
 
     public final String id;
