@@ -12,6 +12,7 @@ repositories {
 
 dependencies {
     implementation("com.github.thorbm1500:UtilityLib:e8fbf74")
+    implementation("com.mysql:mysql-connector-j:9.3.0")
     implementation("net.dv8tion:JDA:${project.properties["jda_version"]}") {
         exclude(module = "opus-java")
         exclude(module = "tink")
@@ -19,6 +20,7 @@ dependencies {
     implementation("com.google.genai:google-genai:1.8.0")
     implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("commons-cli:commons-cli:1.9.0")
+    implementation("org.apache.commons:commons-dbcp2:2.13.0")
     compileOnly("org.projectlombok:lombok:1.18.38")
     annotationProcessor("org.projectlombok:lombok:1.18.38")
     implementation("org.reflections:reflections:0.10.2")

@@ -6,7 +6,11 @@
         </encoder>
     </appender>
 
+    <appender name="DISCORD" class="dev.prodzeus.tdcdb.utils.DiscordLogSink">
+    </appender>
+
     <root level="info">
         <appender-ref ref="STDOUT" />
+        <appender-ref ref="DISCORD" />
     </root>
 </configuration>
