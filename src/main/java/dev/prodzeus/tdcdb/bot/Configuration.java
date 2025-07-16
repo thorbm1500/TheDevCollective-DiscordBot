@@ -25,26 +25,6 @@ public class Configuration {
     private static Opt dbu = new Opt("dbu", "dbUser");
     @Getter
     private static Opt dbp = new Opt("dbp", "dbPass");
-    @Getter
-    private static Opt countChannel = new Opt("cid", "countId", "1379134564340863086");
-    @Getter
-    private static Opt ticketsCategory = new Opt("tid", "ticketsId", "1383188711373537290");
-    @Getter
-    private static Opt aiChannel = new Opt("aic", "aiChannel", "1381246280600387686");
-    @Getter
-    private static Opt welcomeChannel = new Opt("w", "welcomeId", "1379132249856807052");
-    @Getter
-    private static Opt memberRole = new Opt("m", "memberId", "1379135561989750886");
-    @Getter
-    private static Opt logChannel = new Opt("l", "logId", "1395020813039702057");
-    @Getter
-    private static Opt aiLogChannel = new Opt("ail", "aiLogId", "1395020813039702057");
-    @Getter
-    private static Opt userLogChannel = new Opt("ul", "userLogId", "1395020813039702057");
-    @Getter
-    private static Opt guild = new Opt("g", "guildId", "1361258674773033122");
-    @Getter
-    private static Opt staff = new Opt("s", "staff", "1379134761561358488");
 
     public static void initialize(String[] args) {
         var opts = new Options();

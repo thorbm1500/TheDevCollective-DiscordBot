@@ -1,7 +1,6 @@
 package dev.prodzeus.tdcdb.misc;
 
 import dev.prodzeus.tdcdb.bot.Bot;
-import dev.prodzeus.tdcdb.bot.Configuration;
 import dev.prodzeus.tdcdb.utils.Utils;
 import net.dv8tion.jda.api.entities.UserSnowflake;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
@@ -16,8 +15,8 @@ public class MemberWelcome extends ListenerAdapter {
 
     @Override
     public void onGuildMemberJoin(@NotNull GuildMemberJoinEvent e) {
-        e.getGuild().getTextChannelById(Configuration.getWelcomeChannel().get()).sendMessage("NEW MEMBER EMOJI" + "** Welcome to the server " + e.getMember().getAsMention() + "!**").queue();
-        e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(Configuration.getMemberRole().get())).queue();
+        e.getGuild().getTextChannelById(Bot.settings.welcomeChannel).sendMessage("NEW MEMBER EMOJI" + "** Welcome to the server " + e.getMember().getAsMention() + "!**").queue();
+        e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(Bot.settings.memberRole)).queue();
         try {
             addMember.setLong(1, e.getMember().getIdLong());
             addMember.executeUpdate();

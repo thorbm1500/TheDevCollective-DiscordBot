@@ -12,6 +12,6 @@ public class Ready extends ListenerAdapter {
     @Override
     public void onReady(@NotNull ReadyEvent e) {
         e.getJDA().getPresence().setPresence(OnlineStatus.ONLINE, Activity.watching("\uD835\uDD80\uD835\uDD7E\uD835\uDD70\uD835\uDD7D count"));
-        Bot.logger.info(Bot.dLog, Emoji.DOT_GREEN + "** Bot enabled as {}**\n-#Enabled: <t:{}:R>", e.getJDA().getSelfUser().getName(), System.currentTimeMillis());
+        Bot.logger.info(Bot.dLog, Emoji.DOT_GREEN.id + "** Bot enabled as {}**\n-# Enabled: <t:{}:R>", e.getJDA().getSelfUser().getName(), System.currentTimeMillis() / 1000);
     }
 }

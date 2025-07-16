@@ -12,6 +12,7 @@ repositories {
 
 dependencies {
     implementation("com.github.thorbm1500:UtilityLib:e8fbf74")
+    implementation("com.google.code.gson:gson:2.13.1")
     implementation("com.mysql:mysql-connector-j:9.3.0")
     implementation("net.dv8tion:JDA:${project.properties["jda_version"]}") {
         exclude(module = "opus-java")
