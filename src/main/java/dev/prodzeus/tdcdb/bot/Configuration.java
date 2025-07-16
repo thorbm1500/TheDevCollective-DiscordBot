@@ -25,6 +25,10 @@ public class Configuration {
     private static Opt geminiToken = new Opt("ait", "aiToken");
     @Getter
     private static Opt aiChannel = new Opt("aic", "aiChannel", "1381246280600387686");
+    @Getter
+    private static Opt welcomeChannel = new Opt("w", "welcomeId", "1379132249856807052");
+    @Getter
+    private static Opt memberRole = new Opt("m", "memberId", "1379135561989750886");
 
     public static void initialize(String[] args) {
         var opts = new Options();

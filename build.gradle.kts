@@ -17,6 +17,7 @@ dependencies {
         exclude(module = "tink")
     }
     implementation("com.google.genai:google-genai:1.8.0")
+    implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("commons-cli:commons-cli:1.9.0")
     compileOnly("org.projectlombok:lombok:1.18.38")
     annotationProcessor("org.projectlombok:lombok:1.18.38")
@@ -26,7 +27,7 @@ dependencies {
 tasks.withType<Jar>() {
     manifest {
         attributes(
-            "MainClass" to "dev.prodzeus.tdcdb.Main"
+            "MainClass" to "dev.prodzeus.tdcdb.bot.Main"
         )
     }
 }

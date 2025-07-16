@@ -1,7 +1,4 @@
-package dev.prodzeus.tdcdb;
-
-import dev.prodzeus.tdcdb.bot.Bot;
-import dev.prodzeus.tdcdb.bot.Configuration;
+package dev.prodzeus.tdcdb.bot;
 
 public class Main {
     public static void main(String[] args) {
