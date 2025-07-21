@@ -6,7 +6,7 @@
         </encoder>
     </appender>
 
-    <appender name="DISCORD" class="dev.prodzeus.tdcdb.utils.DiscordLogSink">
+    <appender name="DISCORD" class="dev.prodzeus.jarvis.utils.DiscordLogSink">
     </appender>
 
     <root level="info">

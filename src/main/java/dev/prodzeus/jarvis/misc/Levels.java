@@ -1,8 +1,8 @@
-package dev.prodzeus.tdcdb.misc;
+package dev.prodzeus.jarvis.misc;
 
-import dev.prodzeus.tdcdb.bot.Bot;
-import dev.prodzeus.tdcdb.enums.Emoji;
-import dev.prodzeus.tdcdb.utils.Utils;
+import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.enums.Emoji;
+import dev.prodzeus.jarvis.utils.Utils;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.entities.UserSnowflake;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;

@@ -1,4 +1,4 @@
-package dev.prodzeus.tdcdb.enums;
+package dev.prodzeus.jarvis.enums;
 
 @SuppressWarnings("unused")
 public enum Emoji {
