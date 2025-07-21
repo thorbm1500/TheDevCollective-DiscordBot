@@ -1,5 +1,7 @@
 package dev.prodzeus.jarvis.enums;
 
+import dev.prodzeus.jarvis.utils.Utils;
+
 @SuppressWarnings("unused")
 public enum Emoji {
     NITRO_1_MONTH("<:nitro_1_month:1394817034113781870>"),
@@ -69,5 +71,9 @@ public enum Emoji {
 
     Emoji(final String id) {
         this.id = id;
+    }
+
+    public net.dv8tion.jda.api.entities.emoji.Emoji getEmoji() {
+        return Utils.getGuild().getEmojiById(id);
     }
 }

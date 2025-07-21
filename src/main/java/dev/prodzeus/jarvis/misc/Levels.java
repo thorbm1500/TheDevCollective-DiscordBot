@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 public class Levels extends ListenerAdapter {
     private static final Pattern emoji = Pattern.compile(":[^\\s:][^:]*?:");
     private static final int[] levels = new int[100];
-    private static final HashMap<Long, Long> experienceCooldown = new HashMap<>();
+    private static final HashMap<Integer, Long> experienceCooldown = new HashMap<>();
 
     public Levels() {
         int xp = 0;
@@ -41,10 +41,10 @@ public class Levels extends ListenerAdapter {
     @SneakyThrows
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {
-        final long memberId = e.getMember().getIdLong();
+        final int memberId = (int) e.getMember().getIdLong();
         if (((experienceCooldown.getOrDefault(memberId, 10000000000L) / 1000) - e.getMessage().getTimeCreated().toEpochSecond()) < 30
-                || e.getAuthor().isBot() || e.getAuthor().isSystem()) return;
-        else experienceCooldown.put(e.getMember().getIdLong(), e.getMessage().getTimeCreated().toEpochSecond());
+                || e.getAuthor().isBot() || e.getAuthor().isSystem() || e.isWebhookMessage()) return;
+        else experienceCooldown.put(memberId, e.getMessage().getTimeCreated().toEpochSecond());
 
         int xp = 1;
 
@@ -57,7 +57,7 @@ public class Levels extends ListenerAdapter {
         emojis -= (emojis + 1) % 2;
         xp += (int) Math.min(emojis, 5) - 1;
 
-        final int currentExperience = Bot.database.getExperience(e.getMember().getIdLong());
+        final int currentExperience = Bot.database.getExperience(memberId);
         final int currentLevel = getLevelFromXp(currentExperience);
         final int newExperience = currentExperience + xp;
         final int newLevel = getLevelFromXp(xp);
