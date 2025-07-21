@@ -1,49 +1,29 @@
 package dev.prodzeus.jarvis.bot;
 
-import com.google.gson.Gson;
-import dev.prodzeus.jarvis.configuration.Configuration;
+import dev.prodzeus.jarvis.database.Database;
 import dev.prodzeus.jarvis.misc.Levels;
 import dev.prodzeus.jarvis.misc.MemberWelcome;
 import dev.prodzeus.jarvis.misc.Ready;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import org.apache.commons.dbcp2.BasicDataSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 public enum Bot {
     INSTANCE;
 
-    public static Settings settings;
+    public static final Database database;
 
     public final JDA jda;
 
     Bot() {
-        jda = JDABuilder.createDefault(Configuration.getToken().get())
+        jda = JDABuilder.createDefault(System.getenv("BOT_TOKEN"))
                 .addEventListeners(new Ready())
                 .build();
-
+        try { jda.awaitReady(); } catch (InterruptedException ignored) {}
         //commandManager = new CommandManager();
     }
 
     static {
-        var cfg = System.getenv("TDCDB_CONFIG");
-        String config;
-        try {
-            if (cfg == null) {
-                config = new String(Settings.class.getResourceAsStream("/config.json").readAllBytes(), StandardCharsets.UTF_8);
-            } else {
-                config = Files.readString(Paths.get(cfg));
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        settings = new Gson().fromJson(config, Settings.class);
+        database = new Database();
     }
 
     public void initialize() {

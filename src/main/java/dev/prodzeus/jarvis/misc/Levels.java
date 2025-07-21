@@ -1,94 +1,83 @@
 package dev.prodzeus.jarvis.misc;
 
 import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.configuration.enums.Channels;
+import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
 import dev.prodzeus.jarvis.enums.Emoji;
+import dev.prodzeus.jarvis.logger.Logger;
 import dev.prodzeus.jarvis.utils.Utils;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.entities.UserSnowflake;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.regex.Pattern;
 
+@SuppressWarnings("unused")
 public class Levels extends ListenerAdapter {
-    private Pattern emoji = Pattern.compile(":[^\\s:][^:]*?:");
-    private PreparedStatement getMember = Utils.prepareStatement("SELECT (experience, level, last_message) FROM members WHERE id = ?;");
-    private PreparedStatement updateMember = Utils.prepareStatement("UPDATE members SET experience=?,level=?,last_message=now() WHERE id=?;");
-    private int[] levels = new int[100];
+    private static final Pattern emoji = Pattern.compile(":[^\\s:][^:]*?:");
+    private static final int[] levels = new int[100];
+    private static final HashMap<Long, Long> experienceCooldown = new HashMap<>();
 
     public Levels() {
-        var xp = 0;
-        for (var i = 0; i < 100; i++) {
-            xp += (int) (5 * (Math.pow(i, 1.75) + 15));
+        int xp = 0;
+        for (int i = 0; i < 100; i++) {
+            xp += 5 * ((int) Math.pow(i, 1.75) + 15);
             levels[i] = xp;
         }
     }
 
     private int getLevelFromXp(int xp) {
-        if (xp < levels[0]) {
-            return 0;
-        }
-
+        if (xp < levels[0]) return 0;
         int index = Arrays.binarySearch(levels, xp);
-        if (xp == levels[index]) {
-            return index;
-        } else {
-            return index - 1;
-        }
+        if (xp == levels[index]) return index;
+        else return index - 1;
     }
 
     @SneakyThrows
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {
-        var xp = 1;
+        final long memberId = e.getMember().getIdLong();
+        if (((experienceCooldown.getOrDefault(memberId, 10000000000L) / 1000) - e.getMessage().getTimeCreated().toEpochSecond()) < 30
+                || e.getAuthor().isBot() || e.getAuthor().isSystem()) return;
+        else experienceCooldown.put(e.getMember().getIdLong(), e.getMessage().getTimeCreated().toEpochSecond());
 
-        var content = e.getMessage().getContentRaw();
+        int xp = 1;
+
+        String content = e.getMessage().getContentRaw();
         xp += Math.min(content.length(), 200) / 50;
 
         if (!e.getMessage().getAttachments().isEmpty()) xp += 1;
 
-        var emojis = (int) emoji.matcher(content).results().count();
+        long emojis = emoji.matcher(content).results().count();
         emojis -= (emojis + 1) % 2;
-        xp += Math.min(emojis, 5) - 1;
+        xp += (int) Math.min(emojis, 5) - 1;
 
-        var connection = Utils.getConnection();
-        try {
-            connection.setAutoCommit(false);
-            getMember.setLong(1, e.getMember().getIdLong());
-            var userData = getMember.executeQuery();
-            userData.next();
-            var userXp = userData.getInt("experience");
-            var userLevel = userData.getInt("level");
-            var lastMessage = userData.getTimestamp("last_message");
-            if (e.getMessage().getTimeCreated().toEpochSecond() - (lastMessage.getTime() / 1000) > 30) {
-                var newXp = userXp + xp;
-                var newLevel = getLevelFromXp(xp);
-                updateMember.setInt(1, newXp);
-                updateMember.setInt(2, newLevel);
-                updateMember.executeUpdate();
-                if (userLevel < newLevel) {
-                    Bot.INSTANCE.executor.execute(() -> {
-                        Utils.getGuild().getTextChannelById(Bot.settings.levelChannel).sendMessage("%s %s  is now level: **%d**\n-# Current experience: %d".formatted(Emoji.CONFETTI.id, e.getMember().getAsMention(), newLevel, newXp)).queue();
-                        if (newLevel == 1) {
-                            e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(Bot.settings.levels.get(0)));
-                            return;
-                        }
-                        if (newLevel % 5 != 0) return;
-                        e.getGuild().removeRoleFromMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(Bot.settings.levels.get((newLevel - 5) / 5)));
-                        e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(Bot.settings.levels.get(newLevel / 5)));
-                    });
-                }
+        final int currentExperience = Bot.database.getExperience(e.getMember().getIdLong());
+        final int currentLevel = getLevelFromXp(currentExperience);
+        final int newExperience = currentExperience + xp;
+        final int newLevel = getLevelFromXp(xp);
+        final MessageChannel channel = Utils.getGuild().getTextChannelById(Channels.LEVEL.id);
+        if (currentLevel < newLevel) {
+            channel.sendMessage("%s %s  is now level: **%d**\n-# Current experience: %d"
+                    .formatted(Emoji.CONFETTI.id, e.getMember().getAsMention(), newLevel, newExperience)).queue();
+
+            if (newLevel == 1) {
+                e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(LevelRoles.LEVEL_1.id))
+                        .queue(null, f -> Logger.warn("Failed to add role for Level 1 to member %s! %s",String.valueOf(memberId),f.getMessage()));
+                return;
             }
-            connection.commit();
-        } catch (SQLException ex) {
-            connection.rollback();
-            throw new RuntimeException(ex);
-        } finally {
-            connection.setAutoCommit(true);
+
+            if (newLevel % 5 != 0) return;
+            e.getGuild().removeRoleFromMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(LevelRoles.getLevelId(newLevel - 5)))
+                    .queue(null, f -> Logger.warn("Failed to remove role for Level %s from member %s! %s", String.valueOf(newLevel - 5), String.valueOf(memberId), f.getMessage()));
+            e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getId()), e.getGuild().getRoleById(LevelRoles.getLevelId(newLevel)))
+                    .queue(null, f -> Logger.warn("Failed to add role for Level %s to member %s! %s", String.valueOf(newLevel), String.valueOf(memberId), f.getMessage()));
         }
+        Bot.database.updateExperience(memberId,newExperience);
     }
 }

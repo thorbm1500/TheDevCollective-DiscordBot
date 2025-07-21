@@ -34,6 +34,6 @@ public enum LevelRoles {
 
     public static String getLevelId(final int level) {
         for (LevelRoles levelRole : LevelRoles.values()) if (level == levelRole.level) return levelRole.id;
-        return "None.";
+        return LEVEL_1.id;
     }
 }
