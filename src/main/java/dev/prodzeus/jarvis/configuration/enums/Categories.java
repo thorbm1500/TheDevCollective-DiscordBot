@@ -1,12 +1,12 @@
 package dev.prodzeus.jarvis.configuration.enums;
 
 public enum Categories {
-    TICKET("1383188711373537290")
+    TICKET(1383188711373537290L)
     ;
 
-    public final String id;
+    public final long id;
 
-    Categories(final String id) {
+    Categories(final long id) {
         this.id = id;
     }
 }
