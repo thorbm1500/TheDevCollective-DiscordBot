@@ -6,19 +6,20 @@ import dev.prodzeus.jarvis.enums.Counts;
 import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.enums.Member;
 import dev.prodzeus.jarvis.enums.ServerCount;
-import dev.prodzeus.jarvis.logger.Logger;
-import dev.prodzeus.jarvis.logger.Response;
+import dev.prodzeus.jarvis.response.Response;
 import dev.prodzeus.jarvis.utils.Utils;
+import dev.prodzeus.logger.Logger;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
-import static dev.prodzeus.jarvis.logger.Logger.log;
-import static java.util.logging.Level.*;
+import java.util.concurrent.TimeUnit;
 
 public class Count extends ListenerAdapter {
+
+    private static final Logger logger = Bot.INSTANCE.logger;
 
     private static long latestPlayer = 0;
     private static int currentNumber = 0;
@@ -40,7 +41,7 @@ public class Count extends ListenerAdapter {
 
     private static void save() {
         Bot.database.saveServerCountStats(new ServerCount(Utils.getGuild().getIdLong(), currentNumber, highscore, timeOfHighscore));
-        Logger.log("Count data saved to database!");
+        logger.info("Count data saved to database!");
     }
 
     @Override
@@ -55,9 +56,11 @@ public class Count extends ListenerAdapter {
 
         if (event.getMessage().getType().canDelete()) {
             try {
-                event.getMessage().delete().queue(null, f -> log(WARNING,"Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),f));
+                event.getMessage().delete().queueAfter(500, TimeUnit.MILLISECONDS,
+                        null,
+                        f -> logger.warn("Failed to delete message in count channel for server {}! {}",event.getGuild().getId(),f));
             } catch (Exception e) {
-                log(WARNING,"Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),e);
+                logger.warn("Failed to delete message in count channel for server {}! {}",event.getGuild().getId(),e);
             }
         }
 
@@ -71,7 +74,7 @@ public class Count extends ListenerAdapter {
             if (lastWarning > System.currentTimeMillis()) return;
             else lastWarning = System.currentTimeMillis() + 1500;
             new Response(event)
-                    .message("%s You can't count twice in a row!", Emoji.EXCLAMATION.getFormatted())
+                    .message("%s You can't count twice in a row!", Emoji.EXCLAMATION.getString())
                     .deleteAfter(15)
                     .send();
             return;
@@ -107,7 +110,7 @@ public class Count extends ListenerAdapter {
                         .formatted(highscore,Emoji.TROPHY.formatted))).queue();
 
                 Utils.getTextChannel(channel.getIdLong()).getManager().setTopic("Server Highscore: %d".formatted(highscore))
-                        .queue(null,f -> log(WARNING,"Failed to update topic of count channel for server %s! %s",member.server(),f));
+                        .queue(null,f -> logger.warn("Failed to update topic of count channel for server {}! {}",member.server(),f));
             } else {
                 channel.sendMessage("Congratulations %s. You've ruined the count for everyone else a total of %d times! The next number was indeed *not* **%d** but **%d**."
                                 .formatted(member.getMention(), counts.incorrectCounts() + 1, countedNumber, currentNumber)).queue();

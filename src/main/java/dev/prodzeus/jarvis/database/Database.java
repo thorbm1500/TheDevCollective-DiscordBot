@@ -1,10 +1,11 @@
 package dev.prodzeus.jarvis.database;
 
+import dev.prodzeus.jarvis.bot.Bot;
 import dev.prodzeus.jarvis.enums.Counts;
 import dev.prodzeus.jarvis.enums.Member;
 import dev.prodzeus.jarvis.enums.ServerCount;
-import dev.prodzeus.jarvis.logger.Logger;
 import dev.prodzeus.jarvis.utils.Utils;
+import dev.prodzeus.logger.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.Connection;
@@ -13,13 +14,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
-import static dev.prodzeus.jarvis.configuration.enums.LogChannel.DATABASE;
-import static java.util.logging.Level.*;
-
 @SuppressWarnings("unused")
 public class Database {
 
     private Connection connection;
+    private static final Logger logger = Bot.INSTANCE.logger;
 
     private static final Map<String, String> env = System.getenv();
     private static final String host = env.getOrDefault("DB_HOST", "None.");
@@ -29,12 +28,12 @@ public class Database {
     private final String password = env.getOrDefault("DB_PASSWORD", "None.");
     
     public Database() {
-        Logger.log(FINE, DATABASE, "New Database instance called. Attempting to connect to database...");
+        logger.debug("New Database instance called. Attempting to connect to database...");
         if (connect()) {
-            Logger.log(INFO, DATABASE, "Database Connected.");
+            logger.info("Database Connected.");
             createTables();
         } else {
-            Logger.log(SEVERE, DATABASE, "Attempt unsuccessful. Connection to database failed.");
+            logger.warn("Attempt unsuccessful. Connection to database failed.");
         }
     }
 
@@ -43,7 +42,7 @@ public class Database {
             connection = DriverManager.getConnection("jdbc:mysql://%s:%s/%s".formatted(host, port, databaseName), user, password);
             return true;
         } catch (Exception e) {
-            Logger.log(SEVERE, DATABASE, "Connection to the database failed. %s", e);
+            logger.warn("Connection to the database failed. {}", e);
         }
         return false;
     }
@@ -52,7 +51,7 @@ public class Database {
         try {
             if (connection == null || connection.isClosed()) return connect();
         } catch (Exception e) {
-            Logger.log(SEVERE, DATABASE, "Reconnection to the database failed. %s", e);
+            logger.warn("Reconnection to the database failed. {}", e);
             return false;
         }
         return true;
@@ -62,10 +61,10 @@ public class Database {
         try {
             connection.close();
             if (!connection.isClosed()) {
-                Logger.log(SEVERE, DATABASE, "Failed to close connection to the database. Connection was found to still be open!");
-            } else Logger.log(FINE, DATABASE, "Closed connection to the database.");
+                logger.warn("Failed to close connection to the database. Connection was found to still be open!");
+            } else logger.debug("Closed connection to the database.");
         } catch (Exception e) {
-            Logger.log(SEVERE, DATABASE, "Failed to close connection to the database. %s", e);
+            logger.warn("Failed to close connection to the database. {}", e);
         }
     }
 
@@ -88,9 +87,9 @@ public class Database {
                     `count_highscore`         INT NOT NULL DEFAULT 0,
                     `time_of_count_highscore` INT NOT NULL DEFAULT 0)
                     """);
-            Logger.log(FINE, DATABASE, "Created tables in database.");
+            logger.debug("Created tables in database.");
         } catch (Exception e) {
-            Logger.log(SEVERE, DATABASE, "Failed to create database tables. %s", e);
+            logger.warn("Failed to create database tables. {}", e);
         } finally {
             close();
         }
@@ -99,26 +98,26 @@ public class Database {
     public boolean addMember(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) return addMember(member);
-        else Logger.log(WARNING, DATABASE, "Failed to add member to the database. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+        else logger.warn("Failed to add member to the database. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
         return false;
     }
 
     public boolean addMember(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to add member to database but failed. Aborting database task...");
+            logger.warn("Attempted to add member to database but failed. Aborting database task...");
             return false;
         } else if (memberExists(member)) {
-            Logger.log(FINE, DATABASE, "Member with id %s already exists in the database and will not be added.", member.id());
+            logger.debug("Member with id {} already exists in the database and will not be added.", member.id());
             return false;
         }
         try (var statement = connection.prepareStatement("INSERT INTO members (`id`,`server`) VALUES (?,?)")) {
             statement.setLong(1, member.id());
             statement.setLong(2, member.server());
             statement.executeUpdate();
-            Logger.log(FINE, DATABASE, "Added member to database for server %s.", member.id(), member.server());
+            logger.debug("Added member to database for server {}.", member.id(), member.server());
             return true;
         } catch (Exception e) {
-            Logger.log(SEVERE, DATABASE, "Failed to add member %s to database for server %s. %s", member.id(), member.server(), e);
+            logger.warn("Failed to add member {} to database for server {}. {}", member.id(), member.server(), e);
         } finally {
             close();
         }
@@ -128,13 +127,13 @@ public class Database {
     public boolean memberExists(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) return memberExists(member);
-        else Logger.log(WARNING, DATABASE, "Failed to check for member in database. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+        else logger.warn("Failed to check for member in database. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
         return true;
     }
 
     public boolean memberExists(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to check if member exists in database but failed. Aborting database task...");
+            logger.warn("Attempted to check if member exists in database but failed. Aborting database task...");
             return true;
         }
         try (var statement = connection.prepareStatement("SELECT * FROM members WHERE id=? AND server=?")) {
@@ -143,7 +142,7 @@ public class Database {
             ResultSet result = statement.executeQuery();
             return result.next();
         } catch (SQLException e) {
-            Logger.log(WARNING, DATABASE, "Failed to check for member %s in database for server %s! %s", member.id(), member.server(), e);
+            logger.warn("Failed to check for member {} in database for server {}! {}", member.id(), member.server(), e);
             return true;
         }
     }
@@ -151,13 +150,13 @@ public class Database {
     public long getExperience(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) return getExperience(member);
-        else Logger.log(WARNING, DATABASE, "Failed to get experience for member! IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+        else logger.warn("Failed to get experience for member! IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
         return 0;
     }
 
     public long getExperience(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to get experience for member in database but failed. Aborting database task...");
+            logger.warn("Attempted to get experience for member in database but failed. Aborting database task...");
             return 0;
         }
         try (var statement = connection.prepareStatement("SELECT experience FROM members WHERE id=? AND server=?")) {
@@ -165,9 +164,9 @@ public class Database {
             statement.setLong(2, member.server());
             ResultSet result = statement.executeQuery();
             if (result.next()) return result.getLong("experience");
-            else Logger.log(INFO, DATABASE, "No experience found for member %s in database for server %s!", member.id(), member.server());
+            else logger.debug("No experience found for member {} in database for server {}!", member.id(), member.server());
         } catch (SQLException e) {
-            Logger.log(WARNING, DATABASE, "Failed to get experience for member %s in database for server %s! %s", member.id(), member.server(), e);
+            logger.warn("Failed to get experience for member {} in database for server {}! {}", member.id(), member.server(), e);
         }
         return 0;
     }
@@ -175,12 +174,12 @@ public class Database {
     public void updateExperience(@NotNull final Object memberId, @NotNull final Object serverId, final long experience) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) updateExperience(member, experience);
-        else Logger.log(WARNING, DATABASE, "Failed to update experience with %sxp for member! IDs were found to be invalid! Member: %s, Server: %s", experience, memberId, serverId);
+        else logger.warn("Failed to update experience with {}xp for member! IDs were found to be invalid! Member: {}, Server: {}", experience, memberId, serverId);
     }
 
     public void updateExperience(@NotNull final Member member, final long experience) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to update experience for member in database but failed. Aborting database task...");
+            logger.warn("Attempted to update experience for member in database but failed. Aborting database task...");
             return;
         }
         try (var statement = connection.prepareStatement("UPDATE members SET experience=? WHERE id=? AND server=?")) {
@@ -188,51 +187,51 @@ public class Database {
             statement.setLong(2, member.id());
             statement.setLong(3, member.server());
             statement.executeUpdate();
-            Logger.log(FINE, DATABASE, "Updated experience for member %s to %s for server %s", member.id(), experience, member.server());
+            logger.debug("Updated experience for member {} to {} for server {}", member.id(), experience, member.server());
         } catch (SQLException e) {
-            Logger.log(SEVERE, DATABASE, "Failed to update experience with %sxp for member %s in database for server %s! %s", experience, member.id(), member.server(), e);
+            logger.warn("Failed to update experience with {}xp for member {} in database for server {}! {}", experience, member.id(), member.server(), e);
         }
     }
 
     public void incrementCorrectCount(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) incrementCorrectCount(member);
-        else Logger.log(WARNING, DATABASE, "Unable to increment correct count for member in the database. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+        else logger.warn("Unable to increment correct count for member in the database. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
     }
 
     public void incrementCorrectCount(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to increment correct counts for member in database but failed. Aborting database task...");
+            logger.warn("Attempted to increment correct counts for member in database but failed. Aborting database task...");
             return;
         }
         try (var statement = connection.prepareStatement("UPDATE members SET correct_counts=correct_counts+1 WHERE id=? AND server=?")) {
             statement.setLong(1, member.id());
             statement.setLong(2, member.server());
             statement.executeUpdate();
-            Logger.log(FINE, DATABASE, "Correct Count incremented for member %s in database for server %s", member.id(), member.server());
+            logger.debug("Correct Count incremented for member {} in database for server {}", member.id(), member.server());
         } catch (SQLException e) {
-            Logger.log(WARNING, DATABASE, "Failed to increment correct count for member %s in database for server %s. %s", member.id(), member.server(), e);
+            logger.warn("Failed to increment correct count for member {} in database for server {}. {}", member.id(), member.server(), e);
         }
     }
 
     public void incrementIncorrectCount(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) incrementIncorrectCount(member);
-        else Logger.log(WARNING, DATABASE, "Unable to increment incorrect count for member in the database. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+        else logger.warn("Unable to increment incorrect count for member in the database. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
     }
 
     public void incrementIncorrectCount(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to increment incorrect counts for member in database but failed. Aborting database task...");
+            logger.warn("Attempted to increment incorrect counts for member in database but failed. Aborting database task...");
             return;
         }
         try (var statement = connection.prepareStatement("UPDATE members SET incorrect_counts=incorrect_counts+1 WHERE id=? AND server=?")) {
             statement.setLong(1, member.id());
             statement.setLong(2, member.server());
             statement.executeUpdate();
-            Logger.log(FINE, DATABASE, "Incorrect Count incremented for member %s in database for server %s", member.id(), member.server());
+            logger.debug("Incorrect Count incremented for member {} in database for server {}", member.id(), member.server());
         } catch (SQLException e) {
-            Logger.log(WARNING, DATABASE, "Failed to increment incorrect count for member %s in database for server %s. %s", member.id(), member.server(), e);
+            logger.warn("Failed to increment incorrect count for member {} in database for server {}. {}", member.id(), member.server(), e);
         }
     }
 
@@ -240,14 +239,14 @@ public class Database {
     public Counts getUserCounts(@NotNull final Object memberId, @NotNull final Object serverId) {
         final Member member = Utils.getMember(memberId, serverId);
         if (member != null) return getUserCounts(member);
-        else Logger.log(WARNING, DATABASE,"Failed to get counts for member %s in database for server %s. IDs were found to be invalid!", memberId, serverId);
+        else logger.warn("Failed to get counts for member {} in database for server {}. IDs were found to be invalid!", memberId, serverId);
         return new Counts(0, 0);
     }
 
     @NotNull
     public Counts getUserCounts(@NotNull final Member member) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to get counts for member in database but failed. Aborting database task...");
+            logger.warn("Attempted to get counts for member in database but failed. Aborting database task...");
             return new Counts(0, 0);
         }
         try (var statement = connection.prepareStatement("SELECT correct_counts,incorrect_counts FROM members WHERE id=? AND server=?")) {
@@ -256,14 +255,14 @@ public class Database {
             ResultSet result = statement.executeQuery();
             if (result.next()) return new Counts(result.getInt("correct_counts"), result.getInt("incorrect_counts"));
         } catch (SQLException e) {
-            Logger.log(WARNING, DATABASE, "Failed to get counts for member %s in the database for server %s. %s", member.id(), member.server(), e);
+            logger.warn("Failed to get counts for member {} in the database for server {}. {}", member.id(), member.server(), e);
         }
         return new Counts(0, 0);
     }
 
     public int getMemberCount(final long serverId) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to get member count from database for server %s but failed. Aborting database task...", serverId);
+            logger.warn("Attempted to get member count from database for server {} but failed. Aborting database task...", serverId);
             return 0;
         }
         try (var statement = connection.prepareStatement("SELECT count(*) as member_count FROM members")) {
@@ -271,7 +270,7 @@ public class Database {
             if (resultSet.next()) return resultSet.getInt("member_count");
         }
         catch (SQLException e) {
-            Logger.log(SEVERE, DATABASE, "Failed to get member count for server %s! %s", serverId, e);
+            logger.warn("Failed to get member count for server {}! {}", serverId, e);
         }
         return 0;
     }
@@ -281,14 +280,14 @@ public class Database {
         else try {
             return getServerCountStats(Long.parseLong(String.valueOf(serverId)));
         } catch (NumberFormatException e) {
-            Logger.log(WARNING, DATABASE,"Failed to parse server id to Long! %s", serverId);
+            logger.warn("Failed to parse server id to Long! {}", serverId);
             return new ServerCount(0,0,0,0);
         }
     }
 
     public ServerCount getServerCountStats(final long serverId) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to get count stats from database for server %s but failed. Aborting database task...", serverId);
+            logger.warn("Attempted to get count stats from database for server {} but failed. Aborting database task...", serverId);
             return new ServerCount(serverId,0,0,0);
         }
         try (var statement = connection.prepareStatement("SELECT current_count,count_highscore,time_of_count_highscore FROM servers WHERE id=?")) {
@@ -296,14 +295,14 @@ public class Database {
             final ResultSet result = statement.executeQuery();
             if (result.next()) return new ServerCount(serverId,result.getInt("current_count"),result.getInt("count_highscore"),result.getLong("time_of_count_highscore"));
         } catch (SQLException e) {
-            Logger.log(SEVERE, DATABASE,"Failed to get count stats for server %s! %s", serverId, e);
+            logger.warn("Failed to get count stats for server {}! {}", serverId, e);
         }
         return new ServerCount(serverId,0,0,0);
     }
 
     public void saveServerCountStats(@NotNull final ServerCount serverCount) {
         if (!reconnect()) {
-            Logger.log(WARNING, DATABASE, "Attempted to save count stats from database for server %s but failed. Aborting database task...", serverCount.id());
+            logger.warn("Attempted to save count stats from database for server {} but failed. Aborting database task...", serverCount.id());
             return;
         }
         try (var statement = connection.prepareStatement("UPDATE servers SET current_count=?,count_highscore=?,time_of_count_highscore=? WHERE id=?")) {
@@ -312,9 +311,9 @@ public class Database {
             statement.setLong(3,serverCount.epochTime());
             statement.setLong(4,serverCount.id());
             statement.executeUpdate();
-            Logger.log(FINE, DATABASE,"Saved counts stats for server %s in database.",serverCount.id());
+            logger.debug("Saved counts stats for server {} in database.",serverCount.id());
         } catch (SQLException e) {
-            Logger.log(SEVERE, DATABASE,"Failed to save count stats for server %s! %s", serverCount.id(), e);
+            logger.warn("Failed to save count stats for server {}! {}", serverCount.id(), e);
         }
     }
 }

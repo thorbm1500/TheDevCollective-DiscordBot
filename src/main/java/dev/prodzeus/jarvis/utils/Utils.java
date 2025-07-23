@@ -5,7 +5,7 @@ import dev.prodzeus.jarvis.configuration.enums.Configuration;
 import dev.prodzeus.jarvis.configuration.enums.LogChannel;
 import dev.prodzeus.jarvis.configuration.enums.Roles;
 import dev.prodzeus.jarvis.enums.Member;
-import dev.prodzeus.jarvis.logger.Logger;
+import dev.prodzeus.logger.Logger;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -16,9 +16,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-import static java.util.logging.Level.*;
-
+@SuppressWarnings("unused")
 public class Utils {
+
+    private static final Logger logger = Bot.INSTANCE.logger;
 
     private static Guild guild = null;
     private static Role staff = null;
@@ -56,7 +57,7 @@ public class Utils {
             if (memberId instanceof String s1 && serverId instanceof String s2) return getMember(Long.parseLong(s1), Long.parseLong(s2));
             else return getMember(Long.parseLong(String.valueOf(memberId)), Long.parseLong(String.valueOf(serverId)));
         } catch (Exception e) {
-            Logger.log(WARNING,"Failed to get Member instance. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+            logger.warn("Failed to get Member instance. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
             return null;
         }
     }
@@ -71,5 +72,9 @@ public class Utils {
 
     public static TextChannel getTextChannel(final long id) {
         return getGuild().getTextChannelById(id);
+    }
+
+    public static void sendDiscordMessage(@NotNull final LogChannel channel, @NotNull final String message) {
+        Bot.INSTANCE.jda.getTextChannelById(channel.id).sendMessage(message).queue();
     }
 }

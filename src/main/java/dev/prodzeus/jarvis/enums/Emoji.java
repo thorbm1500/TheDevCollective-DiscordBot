@@ -64,7 +64,10 @@ public enum Emoji {
     PLUS(1394835415240020161L,"<:plus:1394835415240020161>"),
     MINUS(1394835318548725790L,"<:minus:1394835318548725790>"),
     EXCLAMATION(1394836274677944340L,"<a:exclamation:1394836274677944340>"),
-    WAVE(1394839102242951248L,"<a:wave:1394839102242951248>")
+    WAVE(1394839102242951248L,"<a:wave:1394839102242951248>"),
+    VERIFICATION_ANIMATION(1397636922582634578L,"<a:verification_animation:1397636922582634578>"),
+    LIGHTNING(1397637302141976596L,"<a:lightning:1397637302141976596>"),
+    GIFT(1397637423441248346L,"<a:gift:1397637423441248346>")
     ;
 
     public final long id;
@@ -75,7 +78,7 @@ public enum Emoji {
         this.formatted = formatted;
     }
 
-    public String getFormatted() {
+    public String getString() {
         return formatted;
     }
 

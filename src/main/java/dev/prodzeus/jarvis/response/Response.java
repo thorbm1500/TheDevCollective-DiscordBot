@@ -1,5 +1,7 @@
-package dev.prodzeus.jarvis.logger;
+package dev.prodzeus.jarvis.response;
 
+import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.logger.Logger;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -8,10 +10,10 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.logging.Level.*;
-
 @SuppressWarnings("unused")
 public class Response {
+
+    private static final Logger logger = Bot.INSTANCE.logger;
 
     private final User user;
     private final MessageChannel channel;
@@ -49,7 +51,7 @@ public class Response {
 
     public void send() {
         if (this.message.isEmpty()) {
-            Logger.log("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
+            logger.warn("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
             return;
         }
 
@@ -58,19 +60,19 @@ public class Response {
                 user.openPrivateChannel().queue(
                         c -> c.sendMessage(message)
                                 .queue(deleteAfter > -1 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null),
-                        f -> Logger.log(SEVERE, "Failed to send private response!\nUser: %s (%s)\n Error: %s",user.getId(), user.getName(), f.getMessage()));
+                        f -> logger.warn("Failed to send private response!\nUser: {} ({})\n Error: {}",user.getId(), user.getName(), f.getMessage()));
             } catch (Exception e) {
-                Logger.log(WARNING, "Failed to send private response!\nUser: %s (%s)\nContent: %s\nException: %s",user.getId(), user.getName(), message, e.getMessage());
+                logger.warn("Failed to send private response!\nUser: {} ({})\nContent: {}\nException: {}",user.getId(), user.getName(), message, e.getMessage());
             }
         } else if (channel != null) {
             try {
                 channel.sendMessage(message)
                         .queue(
                                 deleteAfter > 0 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null,
-                                f -> Logger.log(SEVERE, "Failed to send response!\nChannel: %s (%s)\nMessage: %s\n Error: %s",channel.getId(), channel.getName(), message, f.getMessage()));
+                                f -> logger.warn("Failed to send response!\nChannel: {} ({})\nMessage: {}\n Error: {}",channel.getId(), channel.getName(), message, f.getMessage()));
             } catch (Exception e) {
-                Logger.log(WARNING, "Failed to send response!\nChannel: %s (%s)\nContent: %s\nException: %s",channel.getId(), channel.getName(), message, e.getMessage());
+                logger.warn("Failed to send response!\nChannel: {} ({})\nContent: {}\nException: {}",channel.getId(), channel.getName(), message, e.getMessage());
             }
-        } else Logger.log(WARNING, "Failed to send response!\nChannel: ?\nContent: %s\nError: Channel is null.",message);
+        } else logger.warn("Failed to send response!\nChannel: ?\nContent: {}\nError: Channel is null.",message);
     }
 }

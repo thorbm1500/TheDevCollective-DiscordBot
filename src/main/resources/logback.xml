@@ -9,4 +9,10 @@
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>
+
+    <logger name="net.dv8tion.jda" level="WARN"/>
+    <logger name="net.dv8tion.jda.api" level="WARN"/>
+    <logger name="net.dv8tion.jda.internal" level="WARN"/>
+    <logger name="net.dv8tion.jda.*" level="warn"/>
+    <logger name="dev.prodzeus.logger" level="info"/>
 </configuration>

@@ -1,10 +1,16 @@
 package dev.prodzeus.jarvis.bot;
 
+import dev.prodzeus.jarvis.configuration.enums.LogChannel;
 import dev.prodzeus.jarvis.database.Database;
 import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.games.Count;
-import dev.prodzeus.jarvis.listeners.*;
-import dev.prodzeus.jarvis.logger.Logger;
+import dev.prodzeus.jarvis.listeners.Levels;
+import dev.prodzeus.jarvis.listeners.MemberWelcome;
+import dev.prodzeus.jarvis.listeners.Ready;
+import dev.prodzeus.jarvis.listeners.Shutdown;
+import dev.prodzeus.jarvis.utils.Utils;
+import dev.prodzeus.logger.Logger;
+import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.requests.GatewayIntent;
@@ -13,17 +19,19 @@ import net.dv8tion.jda.internal.utils.JDALogger;
 public enum Bot {
     INSTANCE;
 
+    public final Logger logger;
     public static final Database database;
     public final JDA jda;
 
     Bot() {
-        JDALogger.setFallbackLoggerEnabled(true);
+        this.logger = new SLF4JProvider().getLoggerFactory().getLogger("Jarvis");
+        logger.info("New Logger instance created.");
+        JDALogger.setFallbackLoggerEnabled(false);
         this.jda = JDABuilder.createDefault(System.getenv("TOKEN"))
                 .addEventListeners(new Ready())
                 .setAutoReconnect(true)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
-        Logger.raw("Enabled Gateways: %s",jda.getGatewayIntents());
     }
 
     static {
@@ -31,17 +39,26 @@ public enum Bot {
     }
 
     public void initialize() {
+        logger.info("Attempting to connect to JDA.");
         while (!jda.getStatus().equals(JDA.Status.CONNECTED)) {
             try { jda.awaitReady(); }
             catch (InterruptedException ignored) {}
         }
-        Logger.log("JDA Connected.");
+        logger.info("JDA Connected.");
+        logger.registerConsumer(e -> {
+            try {
+                this.jda.getTextChannelById(LogChannel.LOG.id)
+                        .sendMessage("```js\n%s\n```".formatted(e))
+                        .setSuppressedNotifications(true)
+                        .queue(null, f -> logger.warn("Failed to log message to discord! {}",f));
+            } catch (Exception ignored) {}
+        });
         jda.addEventListener(new MemberWelcome());
         jda.addEventListener(new Levels());
         jda.addEventListener(new Count());
-        jda.addEventListener(new Suggestion());
         jda.addEventListener(new Shutdown());
-        Logger.log("%s **Bot enabled as %s**\n-# Enabled: <t:%s:R>", Emoji.DOT_GREEN.formatted,jda.getSelfUser().getName(),(System.currentTimeMillis() / 1000));
+        Utils.sendDiscordMessage(LogChannel.LOG, "%s **Enabled**\n-# Enabled: <t:%d:R>"
+                .formatted(Emoji.DOT_GREEN.formatted,(System.currentTimeMillis() / 1000)));
     }
 
 }

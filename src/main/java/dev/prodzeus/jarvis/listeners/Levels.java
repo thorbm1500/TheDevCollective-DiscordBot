@@ -5,7 +5,6 @@ import dev.prodzeus.jarvis.configuration.enums.Channel;
 import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
 import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.enums.Member;
-import dev.prodzeus.jarvis.logger.Logger;
 import dev.prodzeus.jarvis.utils.Utils;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.entities.UserSnowflake;
@@ -17,8 +16,6 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.regex.Pattern;
-
-import static java.util.logging.Level.WARNING;
 
 @SuppressWarnings("unused")
 public class Levels extends ListenerAdapter {
@@ -74,15 +71,15 @@ public class Levels extends ListenerAdapter {
 
             if (newLevel == 1) {
                 e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.LEVEL_1.getRole())
-                        .queue(null, f -> Logger.log(WARNING,"Failed to add role for Level 1 to member %s! %s",member.id(),f));
+                        .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to add role for Level 1 to member {}! {}",member.id(),f));
                 return;
             }
 
             if (newLevel % 5 != 0) return;
             e.getGuild().removeRoleFromMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel-5))
-                    .queue(null, f -> Logger.log(WARNING,"Failed to remove role for Level %s from member %s! %s",(newLevel - 5),member.id(),f));
+                    .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to remove role for Level {} from member {}! {}",(newLevel - 5),member.id(),f));
             e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel))
-                    .queue(null, f -> Logger.log(WARNING,"Failed to add role for Level %s to member %s! %s",newLevel,member.id(),f));
+                    .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to add role for Level {} to member {}! {}",newLevel,member.id(),f));
         }
         Bot.database.updateExperience(member,newExperience);
     }

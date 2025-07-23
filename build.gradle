@@ -9,12 +9,11 @@ version = '1.0'
 
 repositories {
     mavenCentral()
-    maven { url = uri('https://jitpack.io') }
+    maven {url = uri('https://jitpack.io') }
 }
 
 dependencies {
-    implementation 'com.github.thorbm1500:UtilityLib:e8fbf74'
-    implementation 'com.github.thorbm1500:Logger:81d2f30'
+    implementation 'com.github.thorbm1500:Logger:7f1736194a'
     implementation 'com.google.code.gson:gson:2.13.1'
     implementation 'com.mysql:mysql-connector-j:9.3.0'
     implementation 'commons-cli:commons-cli:1.9.0'
@@ -23,19 +22,18 @@ dependencies {
     implementation 'net.dv8tion:JDA:5.6.1'
     implementation 'ch.qos.logback:logback-classic:1.5.6'
     compileOnly 'org.projectlombok:lombok:1.18.38'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.5.13'
     annotationProcessor 'org.projectlombok:lombok:1.18.38'
-}
-
-jar {
-    manifest {
-        attributes["Manifest-Version"] = "1.0"
-        attributes["Main-Class"] = "dev.prodzeus.jarvis.bot.Main"
-    }
-    archiveFileName = 'Jarvis.jar'
 }
 
 application {
     mainClass = 'dev.prodzeus.jarvis.bot.Main'
+    jar {
+        manifest {
+            attributes["Manifest-Version"] = "1.0"
+            attributes["Main-Class"] = "dev.prodzeus.jarvis.bot.Main"
+        }
+    }
 }
 
 shadowJar {
