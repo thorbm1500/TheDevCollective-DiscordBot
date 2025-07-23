@@ -1,6 +1,6 @@
 package dev.prodzeus.jarvis.configuration.enums;
 
-public enum LogChannels {
+public enum LogChannel {
     LOG(1379145039242068199L),
     USER(1380559321498390599L),
     AI(1381224971736580197L),
@@ -9,7 +9,7 @@ public enum LogChannels {
 
     public final long id;
 
-    LogChannels(final long id) {
+    LogChannel(final long id) {
         this.id = id;
     }
 }

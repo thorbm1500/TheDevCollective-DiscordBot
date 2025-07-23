@@ -49,7 +49,7 @@ public class Response {
 
     public void send() {
         if (this.message.isEmpty()) {
-            Logger.warn("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
+            Logger.log("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
             return;
         }
 
@@ -58,19 +58,19 @@ public class Response {
                 user.openPrivateChannel().queue(
                         c -> c.sendMessage(message)
                                 .queue(deleteAfter > -1 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null),
-                        f -> Logger.console(SEVERE, "Failed to send private response!\nUser: %s (%s)\n Error: %s",user.getId(), user.getName(), f.getMessage()));
+                        f -> Logger.log(SEVERE, "Failed to send private response!\nUser: %s (%s)\n Error: %s",user.getId(), user.getName(), f.getMessage()));
             } catch (Exception e) {
-                Logger.console(WARNING, "Failed to send private response!\nUser: %s (%s)\nContent: %s\nException: %s",user.getId(), user.getName(), message, e.getMessage());
+                Logger.log(WARNING, "Failed to send private response!\nUser: %s (%s)\nContent: %s\nException: %s",user.getId(), user.getName(), message, e.getMessage());
             }
         } else if (channel != null) {
             try {
                 channel.sendMessage(message)
                         .queue(
                                 deleteAfter > 0 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null,
-                                f -> Logger.console(SEVERE, "Failed to send response!\nChannel: %s (%s)\nMessage: %s\n Error: %s",channel.getId(), channel.getName(), message, f.getMessage()));
+                                f -> Logger.log(SEVERE, "Failed to send response!\nChannel: %s (%s)\nMessage: %s\n Error: %s",channel.getId(), channel.getName(), message, f.getMessage()));
             } catch (Exception e) {
-                Logger.console(WARNING, "Failed to send response!\nChannel: %s (%s)\nContent: %s\nException: %s",channel.getId(), channel.getName(), message, e.getMessage());
+                Logger.log(WARNING, "Failed to send response!\nChannel: %s (%s)\nContent: %s\nException: %s",channel.getId(), channel.getName(), message, e.getMessage());
             }
-        } else Logger.console(WARNING, "Failed to send response!\nChannel: ?\nContent: %s\nError: Channel is null.",message);
+        } else Logger.log(WARNING, "Failed to send response!\nChannel: ?\nContent: %s\nError: Channel is null.",message);
     }
 }

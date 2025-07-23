@@ -7,6 +7,8 @@ import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.logging.Level;
+
 public enum Roles {
     MEMBER("Member",1379135561989750886L),
     STAFF("Staff",1379134761561358488L)
@@ -26,6 +28,6 @@ public enum Roles {
     }
 
     public void addRole(final Member member) {
-        Utils.getGuild().addRoleToMember(member.getUser(),getRole()).queue(null, f -> Logger.warn("Failed to add %s role to member %s! %s",name,member.getAsMention(),f));
+        Utils.getGuild().addRoleToMember(member.getUser(),getRole()).queue(null, f -> Logger.log(Level.WARNING,"Failed to add %s role to member %s! %s",name,member.getAsMention(),f));
     }
 }

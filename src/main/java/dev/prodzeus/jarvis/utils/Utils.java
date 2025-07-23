@@ -2,7 +2,7 @@ package dev.prodzeus.jarvis.utils;
 
 import dev.prodzeus.jarvis.bot.Bot;
 import dev.prodzeus.jarvis.configuration.enums.Configuration;
-import dev.prodzeus.jarvis.configuration.enums.LogChannels;
+import dev.prodzeus.jarvis.configuration.enums.LogChannel;
 import dev.prodzeus.jarvis.configuration.enums.Roles;
 import dev.prodzeus.jarvis.enums.Member;
 import dev.prodzeus.jarvis.logger.Logger;
@@ -15,6 +15,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+
+import static java.util.logging.Level.*;
 
 public class Utils {
 
@@ -43,7 +45,7 @@ public class Utils {
     }
 
     @Contract(pure = true)
-    public static MessageChannel getLogChannel(@NotNull final LogChannels channel) {
+    public static MessageChannel getLogChannel(@NotNull final LogChannel channel) {
         return getGuild().getTextChannelById(channel.id);
     }
 
@@ -54,7 +56,7 @@ public class Utils {
             if (memberId instanceof String s1 && serverId instanceof String s2) return getMember(Long.parseLong(s1), Long.parseLong(s2));
             else return getMember(Long.parseLong(String.valueOf(memberId)), Long.parseLong(String.valueOf(serverId)));
         } catch (Exception e) {
-            Logger.warn("Failed to get Member instance. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
+            Logger.log(WARNING,"Failed to get Member instance. IDs were found to be invalid! Member: %s, Server: %s", memberId, serverId);
             return null;
         }
     }

@@ -1,7 +1,7 @@
-package dev.prodzeus.jarvis.misc;
+package dev.prodzeus.jarvis.listeners;
 
 import dev.prodzeus.jarvis.bot.Bot;
-import dev.prodzeus.jarvis.configuration.enums.Channels;
+import dev.prodzeus.jarvis.configuration.enums.Channel;
 import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
 import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.enums.Member;
@@ -17,6 +17,8 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.regex.Pattern;
+
+import static java.util.logging.Level.WARNING;
 
 @SuppressWarnings("unused")
 public class Levels extends ListenerAdapter {
@@ -44,8 +46,8 @@ public class Levels extends ListenerAdapter {
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {
         final Member member = Utils.getMember(e.getMember());
         final long timeOfCreation = e.getMessage().getTimeCreated().toEpochSecond();
-        if (((experienceCooldown.getOrDefault(member.id(), 10000000000L) / 1000) - timeOfCreation) < 30
-                || e.getAuthor().isBot() || e.getAuthor().isSystem() || e.isWebhookMessage()) return;
+        if (e.getAuthor().isBot() || e.getAuthor().isSystem() || e.isWebhookMessage()) return;
+        if (((experienceCooldown.getOrDefault(member.id(), 10000000000L) / 1000) - timeOfCreation) < 30) return;
         else experienceCooldown.put(member.id(), timeOfCreation);
 
         final long currentExperience = Bot.database.getExperience(member);
@@ -65,22 +67,22 @@ public class Levels extends ListenerAdapter {
         final long newExperience = currentExperience + xp;
         final int newLevel = getLevelFromXp(newExperience);
 
-        final MessageChannel channel = Utils.getTextChannel(Channels.LEVEL.id);
+        final MessageChannel channel = Utils.getTextChannel(Channel.LEVEL.id);
         if (currentLevel < newLevel) {
             channel.sendMessage("%s %s  is now level: **%d**\n-# Current experience: %d"
                     .formatted(Emoji.CONFETTI.id, e.getMember().getAsMention(),newLevel,newExperience)).queue();
 
             if (newLevel == 1) {
                 e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.LEVEL_1.getRole())
-                        .queue(null, f -> Logger.warn("Failed to add role for Level 1 to member %s! %s",member.id(),f));
+                        .queue(null, f -> Logger.log(WARNING,"Failed to add role for Level 1 to member %s! %s",member.id(),f));
                 return;
             }
 
             if (newLevel % 5 != 0) return;
             e.getGuild().removeRoleFromMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel-5))
-                    .queue(null, f -> Logger.warn("Failed to remove role for Level %s from member %s! %s",(newLevel-5),member.id(),f));
+                    .queue(null, f -> Logger.log(WARNING,"Failed to remove role for Level %s from member %s! %s",(newLevel - 5),member.id(),f));
             e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel))
-                    .queue(null, f -> Logger.warn("Failed to add role for Level %s to member %s! %s",newLevel,member.id(),f));
+                    .queue(null, f -> Logger.log(WARNING,"Failed to add role for Level %s to member %s! %s",newLevel,member.id(),f));
         }
         Bot.database.updateExperience(member,newExperience);
     }

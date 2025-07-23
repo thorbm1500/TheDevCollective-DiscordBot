@@ -1,7 +1,7 @@
 package dev.prodzeus.jarvis.games;
 
 import dev.prodzeus.jarvis.bot.Bot;
-import dev.prodzeus.jarvis.configuration.enums.Channels;
+import dev.prodzeus.jarvis.configuration.enums.Channel;
 import dev.prodzeus.jarvis.enums.Counts;
 import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.enums.Member;
@@ -14,6 +14,9 @@ import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
+
+import static dev.prodzeus.jarvis.logger.Logger.log;
+import static java.util.logging.Level.*;
 
 public class Count extends ListenerAdapter {
 
@@ -37,6 +40,7 @@ public class Count extends ListenerAdapter {
 
     private static void save() {
         Bot.database.saveServerCountStats(new ServerCount(Utils.getGuild().getIdLong(), currentNumber, highscore, timeOfHighscore));
+        Logger.log("Count data saved to database!");
     }
 
     @Override
@@ -47,18 +51,19 @@ public class Count extends ListenerAdapter {
         final Member member = Utils.getMember(event.getMember());
 
         final MessageChannel channel = event.getChannel();
-        if (channel.getIdLong() != Channels.COUNT.id) return;
+        if (channel.getIdLong() != Channel.COUNT.id) return;
 
         if (event.getMessage().getType().canDelete()) {
             try {
-                event.getMessage().delete().queue(null, f -> Logger.warn("Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),f));
+                event.getMessage().delete().queue(null, f -> log(WARNING,"Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),f));
             } catch (Exception e) {
-                Logger.warn("Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),e);
+                log(WARNING,"Failed to delete message in count channel for server %s! %s",event.getGuild().getId(),e);
             }
         }
 
         int countedNumber;
         try {
+            System.out.println("RAW: " + event.getMessage().getContentRaw());
             countedNumber = Integer.parseInt(event.getMessage().getContentRaw());
         } catch (Exception ignored) { return; }
 
@@ -102,7 +107,7 @@ public class Count extends ListenerAdapter {
                         .formatted(highscore,Emoji.TROPHY.formatted))).queue();
 
                 Utils.getTextChannel(channel.getIdLong()).getManager().setTopic("Server Highscore: %d".formatted(highscore))
-                        .queue(null,f -> Logger.warn("Failed to update Topic of count channel for server %s! %s",member.server(),f));
+                        .queue(null,f -> log(WARNING,"Failed to update topic of count channel for server %s! %s",member.server(),f));
             } else {
                 channel.sendMessage("Congratulations %s. You've ruined the count for everyone else a total of %d times! The next number was indeed *not* **%d** but **%d**."
                                 .formatted(member.getMention(), counts.incorrectCounts() + 1, countedNumber, currentNumber)).queue();

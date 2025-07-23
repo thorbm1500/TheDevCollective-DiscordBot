@@ -1,13 +1,14 @@
 package dev.prodzeus.jarvis.bot;
 
 import dev.prodzeus.jarvis.database.Database;
+import dev.prodzeus.jarvis.enums.Emoji;
 import dev.prodzeus.jarvis.games.Count;
-import dev.prodzeus.jarvis.misc.Levels;
-import dev.prodzeus.jarvis.misc.MemberWelcome;
-import dev.prodzeus.jarvis.misc.Ready;
-import dev.prodzeus.jarvis.misc.Suggestion;
+import dev.prodzeus.jarvis.listeners.*;
+import dev.prodzeus.jarvis.logger.Logger;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.internal.utils.JDALogger;
 
 public enum Bot {
     INSTANCE;
@@ -16,10 +17,13 @@ public enum Bot {
     public final JDA jda;
 
     Bot() {
-        this.jda = JDABuilder.createDefault(System.getenv("BOT_TOKEN"))
+        JDALogger.setFallbackLoggerEnabled(true);
+        this.jda = JDABuilder.createDefault(System.getenv("TOKEN"))
                 .addEventListeners(new Ready())
+                .setAutoReconnect(true)
+                .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .build();
-        try { this.jda.awaitReady(); } catch (InterruptedException ignored) {}
+        Logger.raw("Enabled Gateways: %s",jda.getGatewayIntents());
     }
 
     static {
@@ -27,10 +31,17 @@ public enum Bot {
     }
 
     public void initialize() {
+        while (!jda.getStatus().equals(JDA.Status.CONNECTED)) {
+            try { jda.awaitReady(); }
+            catch (InterruptedException ignored) {}
+        }
+        Logger.log("JDA Connected.");
         jda.addEventListener(new MemberWelcome());
         jda.addEventListener(new Levels());
         jda.addEventListener(new Count());
         jda.addEventListener(new Suggestion());
+        jda.addEventListener(new Shutdown());
+        Logger.log("%s **Bot enabled as %s**\n-# Enabled: <t:%s:R>", Emoji.DOT_GREEN.formatted,jda.getSelfUser().getName(),(System.currentTimeMillis() / 1000));
     }
 
 }
