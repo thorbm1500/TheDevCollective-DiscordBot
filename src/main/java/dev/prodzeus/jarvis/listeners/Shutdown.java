@@ -1,7 +1,7 @@
 package dev.prodzeus.jarvis.listeners;
 
 import dev.prodzeus.jarvis.bot.Bot;
-import dev.prodzeus.jarvis.games.Count;
+import dev.prodzeus.jarvis.games.count.Count;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;

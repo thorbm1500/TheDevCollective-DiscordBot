@@ -1,4 +1,4 @@
-package dev.prodzeus.jarvis.games;
+package dev.prodzeus.jarvis.games.count;
 
 import dev.prodzeus.jarvis.bot.Bot;
 import dev.prodzeus.jarvis.configuration.enums.Channel;
@@ -21,12 +21,12 @@ public class Count extends ListenerAdapter {
 
     private static final Logger logger = Bot.INSTANCE.logger;
 
-    private static long latestPlayer = 0;
+    private static long latestPlayer = 0L;
     private static int currentNumber = 0;
-    private static long lastWarning = 0;
+    private static long lastWarning = 0L;
     private static boolean highscoreAnnounced = false;
     private static int highscore = 0;
-    private static long timeOfHighscore = 0;
+    private static long timeOfHighscore = 0L;
 
     public Count() {
         final ServerCount count = Bot.database.getServerCountStats(Utils.getGuild().getIdLong());
@@ -46,10 +46,10 @@ public class Count extends ListenerAdapter {
 
     @Override
     public synchronized void onMessageReceived(@NotNull MessageReceivedEvent event) {
-        final User user = event.getAuthor();
-        if (event.isWebhookMessage() || user.isBot() || user.isSystem()) return;
+        if (event.isWebhookMessage()) return;
 
-        final Member member = Utils.getMember(event.getMember());
+        final User user = event.getAuthor();
+        if (user.isBot() || user.isSystem()) return;
 
         final MessageChannel channel = event.getChannel();
         if (channel.getIdLong() != Channel.COUNT.id) return;
@@ -66,13 +66,14 @@ public class Count extends ListenerAdapter {
 
         int countedNumber;
         try {
-            System.out.println("RAW: " + event.getMessage().getContentRaw());
             countedNumber = Integer.parseInt(event.getMessage().getContentRaw());
         } catch (Exception ignored) { return; }
 
+        final Member member = Utils.getMember(event.getMember());
+
         if (latestPlayer == member.id()) {
             if (lastWarning > System.currentTimeMillis()) return;
-            else lastWarning = System.currentTimeMillis() + 1500;
+            else lastWarning = System.currentTimeMillis() + 15000;
             new Response(event)
                     .message("%s You can't count twice in a row!", Emoji.EXCLAMATION.getString())
                     .deleteAfter(15)
@@ -85,19 +86,19 @@ public class Count extends ListenerAdapter {
         if (countedNumber == currentNumber++) {
             if (countedNumber > highscore) {
                 if (highscoreAnnounced) {
-                    channel.sendMessage("%s **%d**\n-# Correct counts: %d  |  Incorrect counts: %d"
-                                    .formatted(member.getMention(), countedNumber, counts.correctCounts(), counts.incorrectCounts()))
+                    channel.sendMessage("%s **%d**\n-# Rank: %s | Correct counts: %d  |  Incorrect counts: %d"
+                                    .formatted(member.getMention(), countedNumber, CountLevel.getCountLevel(counts.correctCounts()).emoji.getString(), counts.correctCounts(), counts.incorrectCounts()))
                             .queue(s -> s.addReaction(Emoji.TROPHY.getEmoji()).queue());
                 } else {
-                    channel.sendMessage("%s **%d**\n-# Correct counts: %d  |  Incorrect counts: %d\n{Emojis.CELEBRATION} You just broke the record! New highscore: **%d**\n-# Previous highscore of %d was made: <t:%d:R>"
-                                    .formatted(member.getMention(), countedNumber, counts.correctCounts(), counts.incorrectCounts(), countedNumber, highscore, timeOfHighscore))
+                    channel.sendMessage("%s **%d**\n-# Rank: %s | Correct counts: %d  |  Incorrect counts: %d\n{Emojis.CELEBRATION} You just broke the record! New highscore: **%d**\n-# Previous highscore of %d was made: <t:%d:R>"
+                                    .formatted(member.getMention(), countedNumber, CountLevel.getCountLevel(counts.correctCounts()).emoji.getString(), counts.correctCounts(), counts.incorrectCounts(), countedNumber, highscore, timeOfHighscore))
                             .queue(s -> s.addReaction(Emoji.TROPHY.getEmoji()).queue());
                     highscoreAnnounced = true;
                 }
                 highscore = countedNumber;
                 timeOfHighscore = event.getMessage().getTimeCreated().toEpochSecond();
-            } else channel.sendMessage("%s **%d**\n-# Correct counts: %d  |  Incorrect counts: %d"
-                            .formatted(member.getMention(), countedNumber, counts.correctCounts(), counts.incorrectCounts()))
+            } else channel.sendMessage("%s **%d**\n-# Rank: %s | Correct counts: %d  |  Incorrect counts: %d"
+                            .formatted(member.getMention(), countedNumber, CountLevel.getCountLevel(counts.correctCounts()).emoji.getString(), counts.correctCounts(), counts.incorrectCounts()))
                     .queue();
         } else {
             currentNumber = 1;

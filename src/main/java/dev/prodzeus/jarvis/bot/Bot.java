@@ -3,18 +3,17 @@ package dev.prodzeus.jarvis.bot;
 import dev.prodzeus.jarvis.configuration.enums.LogChannel;
 import dev.prodzeus.jarvis.database.Database;
 import dev.prodzeus.jarvis.enums.Emoji;
-import dev.prodzeus.jarvis.games.Count;
-import dev.prodzeus.jarvis.listeners.Levels;
-import dev.prodzeus.jarvis.listeners.MemberWelcome;
-import dev.prodzeus.jarvis.listeners.Ready;
+import dev.prodzeus.jarvis.games.count.Count;
+import dev.prodzeus.jarvis.listeners.*;
 import dev.prodzeus.jarvis.listeners.Shutdown;
 import dev.prodzeus.jarvis.utils.Utils;
+import dev.prodzeus.logger.Level;
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.requests.GatewayIntent;
-import net.dv8tion.jda.internal.utils.JDALogger;
+import net.dv8tion.jda.api.utils.cache.CacheFlag;
 
 public enum Bot {
     INSTANCE;
@@ -24,13 +23,13 @@ public enum Bot {
     public final JDA jda;
 
     Bot() {
-        this.logger = new SLF4JProvider().getLoggerFactory().getLogger("Jarvis");
-        logger.info("New Logger instance created.");
-        JDALogger.setFallbackLoggerEnabled(false);
+        this.logger = new SLF4JProvider().getLoggerFactory().getLogger("Jarvis").setLevel(Level.INFO);
         this.jda = JDABuilder.createDefault(System.getenv("TOKEN"))
                 .addEventListeners(new Ready())
                 .setAutoReconnect(true)
-                .enableIntents(GatewayIntent.MESSAGE_CONTENT)
+                .enableIntents(GatewayIntent.MESSAGE_CONTENT,
+                        GatewayIntent.GUILD_EXPRESSIONS)
+                .enableCache(CacheFlag.EMOJI)
                 .build();
     }
 
@@ -54,6 +53,7 @@ public enum Bot {
             } catch (Exception ignored) {}
         });
         jda.addEventListener(new MemberWelcome());
+        jda.addEventListener(new MessageListener());
         jda.addEventListener(new Levels());
         jda.addEventListener(new Count());
         jda.addEventListener(new Shutdown());

@@ -1,6 +1,6 @@
 package dev.prodzeus.jarvis.enums;
 
-import dev.prodzeus.jarvis.utils.Utils;
+import dev.prodzeus.jarvis.bot.Bot;
 
 @SuppressWarnings("unused")
 public enum Emoji {
@@ -65,9 +65,20 @@ public enum Emoji {
     MINUS(1394835318548725790L,"<:minus:1394835318548725790>"),
     EXCLAMATION(1394836274677944340L,"<a:exclamation:1394836274677944340>"),
     WAVE(1394839102242951248L,"<a:wave:1394839102242951248>"),
+    HAND_WAVE(1397701862467047444L,"<a:hand_wave:1397701862467047444>"),
     VERIFICATION_ANIMATION(1397636922582634578L,"<a:verification_animation:1397636922582634578>"),
     LIGHTNING(1397637302141976596L,"<a:lightning:1397637302141976596>"),
-    GIFT(1397637423441248346L,"<a:gift:1397637423441248346>")
+    GIFT(1397637423441248346L,"<a:gift:1397637423441248346>"),
+    COUNT_LEVEL_0(1397689381757911042L,"<:count_level_0:1397689381757911042>"),
+    COUNT_LEVEL_1(1397683118734839955L,"<:count_level_1:1397683118734839955>"),
+    COUNT_LEVEL_2(1397683138616098826L,"<:count_level_2:1397683138616098826>"),
+    COUNT_LEVEL_3(1397683216810508439L,"<:count_level_3:1397683216810508439>"),
+    COUNT_LEVEL_4(1397683246141280487L,"<:count_level_4:1397683246141280487>"),
+    COUNT_LEVEL_5(1397683294723772426L,"<:count_level_5:1397683294723772426>"),
+    COUNT_LEVEL_6(1397683319071576185L,"<:count_level_6:1397683319071576185>"),
+    COUNT_LEVEL_7(1397683346024304692L,"<:count_level_7:1397683346024304692>"),
+    COUNT_LEVEL_8(1397683373639733289L,"<:count_level_8:1397683373639733289>"),
+    COUNT_LEVEL_9(1397683396863332362L,"<:count_level_9:1397683396863332362>"),
     ;
 
     public final long id;
@@ -83,6 +94,6 @@ public enum Emoji {
     }
 
     public net.dv8tion.jda.api.entities.emoji.Emoji getEmoji() {
-        return Utils.getGuild().getEmojiById(id);
+        return Bot.INSTANCE.jda.getEmojiById(id);
     }
 }

@@ -3,6 +3,7 @@ package dev.prodzeus.jarvis.configuration.enums;
 import dev.prodzeus.jarvis.utils.Utils;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
+@SuppressWarnings("unused")
 public enum Channel {
     WELCOME(1379132249856807052L),
     COUNT(1379134564340863086L),
