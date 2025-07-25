@@ -1,18 +1,24 @@
 package dev.prodzeus.jarvis.listeners;
 
-import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.games.count.Count;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
+import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
+
 public class Shutdown extends ListenerAdapter {
+
+    public Shutdown() {
+        LOGGER.debug("New Shutdown Listener created.");
+    }
 
     @Override
     public void onShutdown(@NotNull ShutdownEvent event) {
-        Bot.INSTANCE.logger.clearConsumers();
-        Bot.INSTANCE.logger.info("JDA Shutting down.");
+        Jarvis.LOGGER.info("JDA disconnected. Jarvis shutting down...");
+        Jarvis.LOGGER.clearConsumers();
         Count.shutdown();
-        Bot.INSTANCE.logger.info("Goodbye.");
+        Jarvis.LOGGER.info("Goodbye.");
     }
 }

@@ -4,16 +4,13 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
-group = 'dev.prodzeus'
-version = '1.0'
-
 repositories {
     mavenCentral()
-    maven {url = uri('https://jitpack.io') }
+    maven { url = uri('https://jitpack.io') }
 }
 
 dependencies {
-    implementation 'com.github.thorbm1500:Logger:199ea5a264'
+    implementation 'com.github.thorbm1500:Logger:ce39d375e3'
     implementation 'com.mysql:mysql-connector-j:9.3.0'
     implementation 'net.dv8tion:JDA:6.0.0-rc.1'
     compileOnly 'org.projectlombok:lombok:1.18.38'
@@ -21,11 +18,11 @@ dependencies {
 }
 
 application {
-    mainClass = 'dev.prodzeus.jarvis.bot.Main'
+    mainClass = 'dev.prodzeus.jarvis.bot.Jarvis'
     jar {
         manifest {
-            attributes["Manifest-Version"] = "1.0"
-            attributes["Main-Class"] = "dev.prodzeus.jarvis.bot.Main"
+            attributes["Manifest-Version"] = '1.0'
+            attributes["Main-Class"] = 'dev.prodzeus.jarvis.bot.Jarvis'
         }
     }
 }

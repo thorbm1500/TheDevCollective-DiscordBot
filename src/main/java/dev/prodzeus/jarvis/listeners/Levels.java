@@ -1,10 +1,9 @@
 package dev.prodzeus.jarvis.listeners;
 
-import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.configuration.enums.Channel;
 import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
-import dev.prodzeus.jarvis.enums.Emoji;
-import dev.prodzeus.jarvis.enums.Member;
+import dev.prodzeus.jarvis.enums.CollectiveMember;
 import dev.prodzeus.jarvis.utils.Utils;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.entities.UserSnowflake;
@@ -17,6 +16,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.regex.Pattern;
 
+import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
+
 @SuppressWarnings("unused")
 public class Levels extends ListenerAdapter {
     private static final Pattern emoji = Pattern.compile(":[^\\s:][^:]*?:");
@@ -24,6 +25,7 @@ public class Levels extends ListenerAdapter {
     private static final HashMap<Long, Long> experienceCooldown = new HashMap<>();
 
     public Levels() {
+        LOGGER.debug("New Levels Listener created.");
         long xp = 0;
         for (int i = 0; i < 100; i++) {
             xp += 5 * ((long) Math.pow(i, 1.75) + 15);
@@ -41,13 +43,13 @@ public class Levels extends ListenerAdapter {
     @SneakyThrows
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {
-        final Member member = Utils.getMember(e.getMember());
+        final CollectiveMember collectiveMember = Utils.getCollectiveMember(e.getMember());
         final long timeOfCreation = e.getMessage().getTimeCreated().toEpochSecond();
         if (e.getAuthor().isBot() || e.getAuthor().isSystem() || e.isWebhookMessage()) return;
-        if (((experienceCooldown.getOrDefault(member.id(), 10000000000L) / 1000) - timeOfCreation) < 30) return;
-        else experienceCooldown.put(member.id(), timeOfCreation);
+        if (((experienceCooldown.getOrDefault(collectiveMember.id(), 10000000000L) / 1000) - timeOfCreation) < 30) return;
+        else experienceCooldown.put(collectiveMember.id(), timeOfCreation);
 
-        final long currentExperience = Bot.database.getExperience(member);
+        final long currentExperience = Jarvis.DATABASE.getExperience(collectiveMember);
         final int currentLevel = getLevelFromXp(currentExperience);
 
         long xp = 1;
@@ -67,20 +69,20 @@ public class Levels extends ListenerAdapter {
         final MessageChannel channel = Utils.getTextChannel(Channel.LEVEL.id);
         if (currentLevel < newLevel) {
             channel.sendMessage("%s %s  is now level: **%d**\n-# Current experience: %d"
-                    .formatted(Emoji.CONFETTI.id, e.getMember().getAsMention(),newLevel,newExperience)).queue();
+                    .formatted(Jarvis.BOT.getEmojiFormatted("confetti"), e.getMember().getAsMention(),newLevel,newExperience)).queue();
 
             if (newLevel == 1) {
                 e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.LEVEL_1.getRole())
-                        .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to add role for Level 1 to member {}! {}",member.id(),f));
+                        .queue(null, f -> Jarvis.LOGGER.warn("Failed to add role for Level 1 to member {}! {}", collectiveMember.id(),f));
                 return;
             }
 
             if (newLevel % 5 != 0) return;
             e.getGuild().removeRoleFromMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel-5))
-                    .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to remove role for Level {} from member {}! {}",(newLevel - 5),member.id(),f));
+                    .queue(null, f -> Jarvis.LOGGER.warn("Failed to remove role for Level {} from member {}! {}",(newLevel - 5), collectiveMember.id(),f));
             e.getGuild().addRoleToMember(UserSnowflake.fromId(e.getMember().getIdLong()), LevelRoles.getRole(newLevel))
-                    .queue(null, f -> Bot.INSTANCE.logger.warn("Failed to add role for Level {} to member {}! {}",newLevel,member.id(),f));
+                    .queue(null, f -> Jarvis.LOGGER.warn("Failed to add role for Level {} to member {}! {}",newLevel, collectiveMember.id(),f));
         }
-        Bot.database.updateExperience(member,newExperience);
+        Jarvis.DATABASE.updateExperience(collectiveMember,newExperience);
     }
 }

@@ -1,6 +1,6 @@
 package dev.prodzeus.jarvis.configuration.enums;
 
-import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import net.dv8tion.jda.api.entities.Role;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,12 +43,12 @@ public enum LevelRoles {
 
     @Nullable
     public Role getRole() {
-        return Bot.INSTANCE.jda.getRoleById(id);
+        return Jarvis.BOT.jda.getRoleById(id);
     }
 
     @Nullable
     public static Role getRole(final int level) {
-        for (LevelRoles levelRole : LevelRoles.values()) if (level == levelRole.level) return Bot.INSTANCE.jda.getRoleById(levelRole.id);
+        for (LevelRoles levelRole : LevelRoles.values()) if (level == levelRole.level) return Jarvis.BOT.jda.getRoleById(levelRole.id);
         return LEVEL_1.getRole();
     }
 }

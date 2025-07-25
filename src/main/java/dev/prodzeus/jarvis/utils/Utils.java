@@ -1,11 +1,10 @@
 package dev.prodzeus.jarvis.utils;
 
-import dev.prodzeus.jarvis.bot.Bot;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.configuration.enums.Configuration;
 import dev.prodzeus.jarvis.configuration.enums.LogChannel;
 import dev.prodzeus.jarvis.configuration.enums.Roles;
-import dev.prodzeus.jarvis.enums.Member;
-import dev.prodzeus.logger.Logger;
+import dev.prodzeus.jarvis.enums.CollectiveMember;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
@@ -18,8 +17,6 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 public class Utils {
-
-    private static final Logger logger = Bot.INSTANCE.logger;
 
     private static Guild guild = null;
     private static Role staff = null;
@@ -40,7 +37,7 @@ public class Utils {
     @Contract(pure = true)
     public static Guild getGuild() {
         if (guild == null) {
-            guild = Bot.INSTANCE.jda.getGuildById(Configuration.GUILD.id);
+            guild = Jarvis.BOT.jda.getGuildById(Configuration.GUILD.id);
         }
         return guild;
     }
@@ -52,22 +49,22 @@ public class Utils {
 
     @Nullable
     @Contract(pure = true)
-    public static Member getMember(@NotNull final Object memberId, @NotNull final Object serverId) {
+    public static CollectiveMember getCollectiveMember(@NotNull final Object memberId, @NotNull final Object serverId) {
         try {
-            if (memberId instanceof String s1 && serverId instanceof String s2) return getMember(Long.parseLong(s1), Long.parseLong(s2));
-            else return getMember(Long.parseLong(String.valueOf(memberId)), Long.parseLong(String.valueOf(serverId)));
+            if (memberId instanceof String s1 && serverId instanceof String s2) return getCollectiveMember(Long.parseLong(s1), Long.parseLong(s2));
+            else return getCollectiveMember(Long.parseLong(String.valueOf(memberId)), Long.parseLong(String.valueOf(serverId)));
         } catch (Exception e) {
-            logger.warn("Failed to get Member instance. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
+            Jarvis.LOGGER.warn("Failed to get Member instance. IDs were found to be invalid! Member: {}, Server: {}", memberId, serverId);
             return null;
         }
     }
 
-    public static Member getMember(final long memberId, final long serverId) {
-        return new Member(memberId, serverId);
+    public static CollectiveMember getCollectiveMember(final long memberId, final long serverId) {
+        return new CollectiveMember(memberId, serverId);
     }
 
-    public static Member getMember(@NotNull final net.dv8tion.jda.api.entities.Member member) {
-        return new Member(member.getIdLong(), member.getGuild().getIdLong());
+    public static CollectiveMember getCollectiveMember(@NotNull final net.dv8tion.jda.api.entities.Member member) {
+        return new CollectiveMember(member.getIdLong(), member.getGuild().getIdLong());
     }
 
     public static TextChannel getTextChannel(final long id) {
@@ -75,6 +72,6 @@ public class Utils {
     }
 
     public static void sendDiscordMessage(@NotNull final LogChannel channel, @NotNull final String message) {
-        Bot.INSTANCE.jda.getTextChannelById(channel.id).sendMessage(message).queue();
+        Jarvis.BOT.jda.getTextChannelById(channel.id).sendMessage(message).queue();
     }
 }

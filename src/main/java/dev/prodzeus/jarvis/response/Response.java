@@ -1,7 +1,6 @@
 package dev.prodzeus.jarvis.response;
 
-import dev.prodzeus.jarvis.bot.Bot;
-import dev.prodzeus.logger.Logger;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -12,8 +11,6 @@ import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
 public class Response {
-
-    private static final Logger logger = Bot.INSTANCE.logger;
 
     private final User user;
     private final MessageChannel channel;
@@ -35,6 +32,10 @@ public class Response {
         this.user = user;
     }
 
+    public Response message(@NotNull String message, @NotNull final String f) {
+        return message(message.formatted(f));
+    }
+
     public Response message(@NotNull String message, @NotNull final String... f) {
         return message(message.formatted(Arrays.stream(f).toList()));
     }
@@ -51,7 +52,7 @@ public class Response {
 
     public void send() {
         if (this.message.isEmpty()) {
-            logger.warn("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
+            Jarvis.LOGGER.warn("Failed to send response. No message was provided!\nChannel: %s (%s)",channel.getId(), channel.getName());
             return;
         }
 
@@ -60,19 +61,19 @@ public class Response {
                 user.openPrivateChannel().queue(
                         c -> c.sendMessage(message)
                                 .queue(deleteAfter > -1 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null),
-                        f -> logger.warn("Failed to send private response!\nUser: {} ({})\n Error: {}",user.getId(), user.getName(), f.getMessage()));
+                        f -> Jarvis.LOGGER.warn("Failed to send private response!\nUser: {} ({})\n Error: {}",user.getId(), user.getName(), f.getMessage()));
             } catch (Exception e) {
-                logger.warn("Failed to send private response!\nUser: {} ({})\nContent: {}\nException: {}",user.getId(), user.getName(), message, e.getMessage());
+                Jarvis.LOGGER.warn("Failed to send private response!\nUser: {} ({})\nContent: {}\nException: {}",user.getId(), user.getName(), message, e.getMessage());
             }
         } else if (channel != null) {
             try {
                 channel.sendMessage(message)
                         .queue(
                                 deleteAfter > 0 ? s -> s.delete().queueAfter(deleteAfter, TimeUnit.SECONDS) : null,
-                                f -> logger.warn("Failed to send response!\nChannel: {} ({})\nMessage: {}\n Error: {}",channel.getId(), channel.getName(), message, f.getMessage()));
+                                f -> Jarvis.LOGGER.warn("Failed to send response!\nChannel: {} ({})\nMessage: {}\n Error: {}",channel.getId(), channel.getName(), message, f.getMessage()));
             } catch (Exception e) {
-                logger.warn("Failed to send response!\nChannel: {} ({})\nContent: {}\nException: {}",channel.getId(), channel.getName(), message, e.getMessage());
+                Jarvis.LOGGER.warn("Failed to send response!\nChannel: {} ({})\nContent: {}\nException: {}",channel.getId(), channel.getName(), message, e.getMessage());
             }
-        } else logger.warn("Failed to send response!\nChannel: ?\nContent: {}\nError: Channel is null.",message);
+        } else Jarvis.LOGGER.warn("Failed to send response!\nChannel: ?\nContent: {}\nError: Channel is null.",message);
     }
 }

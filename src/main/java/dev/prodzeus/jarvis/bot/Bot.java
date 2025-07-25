@@ -1,64 +1,186 @@
 package dev.prodzeus.jarvis.bot;
 
 import dev.prodzeus.jarvis.configuration.enums.LogChannel;
-import dev.prodzeus.jarvis.database.Database;
-import dev.prodzeus.jarvis.enums.Emoji;
+import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.games.count.Count;
-import dev.prodzeus.jarvis.listeners.*;
+import dev.prodzeus.jarvis.listeners.Levels;
+import dev.prodzeus.jarvis.listeners.MessageListener;
+import dev.prodzeus.jarvis.listeners.Ready;
 import dev.prodzeus.jarvis.listeners.Shutdown;
 import dev.prodzeus.jarvis.utils.Utils;
-import dev.prodzeus.logger.Level;
-import dev.prodzeus.logger.Logger;
-import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Icon;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.exceptions.ErrorResponseException;
+import net.dv8tion.jda.api.requests.ErrorResponse;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-public enum Bot {
-    INSTANCE;
+import java.io.InputStream;
+import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
-    public final Logger logger;
-    public static final Database database;
+import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
+
+public class Bot {
+
     public final JDA jda;
+    public final Map<String,Long> emojis = new HashMap<>();
+    public final Set<CachedEmoji> cachedEmojis = new HashSet<>();
 
-    Bot() {
-        this.logger = new SLF4JProvider().getLoggerFactory().getLogger("Jarvis").setLevel(Level.INFO);
-        this.jda = JDABuilder.createDefault(System.getenv("TOKEN"))
+    public Bot() {
+        LOGGER.info("New Jarvis Bot instance created.");
+        this.jda = getJda();
+    }
+
+    private JDA getJda() {
+        LOGGER.info("Building new JDA instance.");
+        final JDA newJdaInstance = JDABuilder.createDefault(System.getenv("TOKEN"))
                 .addEventListeners(new Ready())
                 .setAutoReconnect(true)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT,
                         GatewayIntent.GUILD_EXPRESSIONS)
-                .enableCache(CacheFlag.EMOJI)
+                .enableCache(CacheFlag.EMOJI, CacheFlag.STICKER)
                 .build();
-    }
-
-    static {
-        database = new Database();
-    }
-
-    public void initialize() {
-        logger.info("Attempting to connect to JDA.");
-        while (!jda.getStatus().equals(JDA.Status.CONNECTED)) {
-            try { jda.awaitReady(); }
-            catch (InterruptedException ignored) {}
-        }
-        logger.info("JDA Connected.");
-        logger.registerConsumer(e -> {
+        LOGGER.info("Connecting to gateway...");
+        while (!newJdaInstance.getStatus().equals(JDA.Status.CONNECTED)) {
             try {
-                this.jda.getTextChannelById(LogChannel.LOG.id)
-                        .sendMessage("```js\n%s\n```".formatted(e))
-                        .setSuppressedNotifications(true)
-                        .queue(null, f -> logger.warn("Failed to log message to discord! {}",f));
-            } catch (Exception ignored) {}
-        });
-        jda.addEventListener(new MemberWelcome());
+                newJdaInstance.awaitReady();
+            } catch (InterruptedException ignored) {
+            }
+        }
+        LOGGER.info("Connected to gateway.");
+        return newJdaInstance;
+    }
+
+    public void load() {
+        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+        LOGGER.debug("Loading emojis...");
+        jda.retrieveApplicationEmojis().complete().forEach(emoji -> emojis.put(emoji.getName(),emoji.getIdLong()));
+        loadEmojis();
+        LOGGER.debug("Registering Event Listeners.");
         jda.addEventListener(new MessageListener());
         jda.addEventListener(new Levels());
         jda.addEventListener(new Count());
         jda.addEventListener(new Shutdown());
-        Utils.sendDiscordMessage(LogChannel.LOG, "%s **Enabled**\n-# Enabled: <t:%d:R>"
-                .formatted(Emoji.DOT_GREEN.formatted,(System.currentTimeMillis() / 1000)));
+        Utils.sendDiscordMessage(LogChannel.LOG, "%s **Enabled**\n-# Since: <t:%d:R>"
+                .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)));
+        LOGGER.registerConsumer(s -> {
+            try {
+                this.jda.getTextChannelById(LogChannel.LOG.id)
+                        .sendMessage("```js\n"+s+"\n```")
+                        .setSuppressedNotifications(true)
+                        .queue(null, f -> LOGGER.warn("Failed to log message to discord! {}",f));
+            } catch (Exception ignored) {}
+        });
     }
 
+    public void shutdown() {
+        if (jda == null) return;
+        try {
+            Thread.sleep(5000);
+            jda.shutdownNow();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private HashMap<String, Icon> getLocalEmojis() {
+        final HashMap<String, Icon> emojis = new HashMap<>();
+        final Set<String> resourcePaths = new HashSet<>();
+        String jarPath;
+        try {
+            jarPath = getClass().getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+        } catch (Exception e) {
+            LOGGER.error("Failed to get path of Jar! {}", e);
+            return emojis;
+        }
+        LOGGER.debug("Loading Jar at path: {}",jarPath);
+        try (final JarFile jar = new JarFile(jarPath)) {
+            LOGGER.debug("JarFile loaded: {}", jar.getName());
+            final Iterator<JarEntry> iterator = jar.entries().asIterator();
+            while (iterator.hasNext()) {
+                final JarEntry entry = iterator.next();
+                if (!entry.isDirectory() && entry.getName().startsWith("emoji/")) resourcePaths.add("/"+entry.getName());
+            }
+        } catch (Exception e) { LOGGER.error("Jar entry reading failed at path /{}! {}", jarPath, e); }
+        for (final String path : resourcePaths) {
+            try (InputStream stream = getClass().getResourceAsStream(path)) {
+                if (stream != null) {
+                    emojis.put(path.substring("/emoji/".length(), path.lastIndexOf(".")), Icon.from(stream));
+                    LOGGER.debug("Jar Entry: {}", path);
+                }
+            } catch (Exception ex) {
+                LOGGER.error("Failed to get new InputStream for Jar Entry {}! {}", path, ex);
+            }
+        }
+        return emojis;
+    }
+
+    private void loadEmojis() {
+        final HashMap<String, Icon> localEmojis = getLocalEmojis();
+        jda.retrieveApplicationEmojis().complete().forEach(emoji -> cachedEmojis.add(CachedEmoji.cache(emoji)));
+        for (final var index : localEmojis.entrySet()) {
+            if (cachedEmojis.stream().anyMatch(emoji -> index.getKey().equalsIgnoreCase(emoji.name()))) {
+                LOGGER.debug("Emoji {} already exists. Skipping...", index);
+                continue;
+            } else LOGGER.info("Uploading Emoji {} to Jarvis.", index.getKey());
+            try {
+                jda.createApplicationEmoji(index.getKey(), index.getValue())
+                        .queue(
+                                s -> LOGGER.info("Emoji {} successfully uploaded.", s.getName()),
+                                f -> {
+                                    if (f instanceof ErrorResponseException e) {
+                                        final ErrorResponse response = e.getErrorResponse();
+                                        if (response == ErrorResponse.FILE_UPLOAD_MAX_SIZE_EXCEEDED || response == ErrorResponse.CANNOT_RESIZE_BELOW_MAXIMUM) {
+                                            LOGGER.warn("Emoji {} found to exceed maximum size limit! Ensure the Emoji is removed as soon as possible.",index.getKey());
+                                        } else {
+                                            LOGGER.error("Emoji {} rejected. {} {}", index.getKey(), e.getErrorResponse().toString(), e.getResponse());
+                                        }
+                                        e.getResponse().getRawResponse().close();
+                                    }
+                                });
+            } catch (Exception e) { LOGGER.warn("Failed to upload Emoji {} to Jarvis! {}", index.getKey(), e); }
+        }
+        if (validateEmojis(localEmojis.keySet())) LOGGER.info("All emojis loaded and up-to-date.");
+        else LOGGER.warn("Inconsistent emojis found. Please check that all emojis are correct and restart the Bot after.");
+    }
+
+    private boolean validateEmojis(final Set<String> localEmojis) {
+        LOGGER.debug("Validating emojis...");
+        if (cachedEmojis.stream().allMatch(emoji -> localEmojis.contains(emoji.name()))) return true;
+        else {
+            boolean errors = false;
+            final List<String> cachedEmojiNames = new ArrayList<>();
+            cachedEmojis.forEach(emoji -> cachedEmojiNames.add(emoji.name()));
+            for (final String localEmojiName : localEmojis) {
+                if (!cachedEmojiNames.contains(localEmojiName)) {
+                    LOGGER.warn("Emoji {} missing from Jarvis.", localEmojiName);
+                    errors = true;
+                }
+            }
+            return !errors;
+        }
+    }
+
+    @Nullable
+    public Emoji getEmoji(final String name) {
+        final CachedEmoji emoji = getCachedEmoji(name);
+        return emoji == null ? null : emoji.emoji();
+    }
+
+    @NotNull
+    public String getEmojiFormatted(final String name) {
+        final CachedEmoji emoji = getCachedEmoji(name);
+        return emoji == null ? "`<emoji:null>`" : emoji.formatted();
+    }
+
+    @Nullable
+    public CachedEmoji getCachedEmoji(final String name) {
+        return cachedEmojis.stream().filter(emoji -> emoji.name().equals(name)).findFirst().orElse(null);
+    }
 }

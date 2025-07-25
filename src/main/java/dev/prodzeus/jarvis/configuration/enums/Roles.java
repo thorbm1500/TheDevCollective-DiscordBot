@@ -1,8 +1,6 @@
 package dev.prodzeus.jarvis.configuration.enums;
 
-import dev.prodzeus.jarvis.bot.Bot;
-import dev.prodzeus.jarvis.utils.Utils;
-import net.dv8tion.jda.api.entities.Member;
+import dev.prodzeus.jarvis.bot.Jarvis;
 import net.dv8tion.jda.api.entities.Role;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,10 +19,6 @@ public enum Roles {
 
     @Nullable
     public Role getRole() {
-        return Bot.INSTANCE.jda.getRoleById(id);
-    }
-
-    public void addRole(final Member member) {
-        Utils.getGuild().addRoleToMember(member.getUser(),getRole()).queue(null, f -> Bot.INSTANCE.logger.warn("Failed to add {} role to member {}! {}",name,member.getAsMention(),f));
+        return Jarvis.BOT.jda.getRoleById(id);
     }
 }
