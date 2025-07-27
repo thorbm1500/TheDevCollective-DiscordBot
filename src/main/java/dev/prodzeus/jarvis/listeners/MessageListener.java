@@ -1,6 +1,7 @@
 package dev.prodzeus.jarvis.listeners;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -16,8 +17,8 @@ public class MessageListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {
-        final long userId = e.getAuthor().getIdLong();
-        if ( userId == Jarvis.BOT.jda.getSelfUser().getIdLong() || userId == 1378753035664363670L /* Cody's ID */ || e.isWebhookMessage()) return;
+        final User user = e.getAuthor();
+        if (user.isBot() || user.isSystem() || e.isWebhookMessage()) return;
         final String content = e.getMessage().getContentRaw();
         try {
             if (content.toLowerCase().contains("jarvis")) {

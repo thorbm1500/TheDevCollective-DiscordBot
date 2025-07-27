@@ -9,7 +9,7 @@ public enum Roles {
     STAFF("Staff",1379134761561358488L)
     ;
 
-    private final String name;
+    public final String name;
     public final long id;
 
     Roles(final String name, final long id) {

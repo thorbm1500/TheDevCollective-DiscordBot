@@ -4,6 +4,8 @@ import dev.prodzeus.jarvis.bot.Jarvis;
 import net.dv8tion.jda.api.entities.Role;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
+
 public enum LevelRoles {
     LEVEL_1(1,1379502338737176649L),
     LEVEL_5(5,1379502409159675986L),
@@ -50,5 +52,14 @@ public enum LevelRoles {
     public static Role getRole(final int level) {
         for (LevelRoles levelRole : LevelRoles.values()) if (level == levelRole.level) return Jarvis.BOT.jda.getRoleById(levelRole.id);
         return LEVEL_1.getRole();
+    }
+
+    @Nullable
+    public static LevelRoles getLevelRole(final int level) {
+        return Arrays.stream(values()).filter(l -> l.level == level).findFirst().orElse(null);
+    }
+
+    public static boolean contains(final long id) {
+        return Arrays.stream(values()).anyMatch(level -> level.id == id);
     }
 }

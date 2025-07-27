@@ -29,7 +29,9 @@ public enum CountLevel {
     }
 
     public static CountLevel getCountLevel(final int counts) {
-        for(final CountLevel lvl : Arrays.stream(CountLevel.values()).toList().reversed()) if (lvl.requirement <= counts) return lvl;
+        for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
+            if (lvl.requirement <= counts) return lvl;
+        }
         return CountLevel.LEVEL_0;
     }
 }
