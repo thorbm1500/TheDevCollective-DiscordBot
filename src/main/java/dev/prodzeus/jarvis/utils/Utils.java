@@ -1,6 +1,7 @@
 package dev.prodzeus.jarvis.utils;
 
-import dev.prodzeus.jarvis.configuration.enums.Roles;
+import dev.prodzeus.jarvis.bot.Jarvis;
+import dev.prodzeus.jarvis.configuration.Roles;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
@@ -15,7 +16,7 @@ public class Utils {
 
     @Contract(pure = true)
     public static boolean isStaff(@NotNull Guild guild, @NotNull final List<Role> roles) {
-        return roles.contains(getStaffRole(guild));
+        return roles.contains(Jarvis.jda().getRoleById(Roles.get(guild.getIdLong()).staff));
     }
 
     public static boolean isUser(@NotNull final Member member) {

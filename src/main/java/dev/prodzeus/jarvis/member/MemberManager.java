@@ -4,6 +4,7 @@ import dev.prodzeus.jarvis.bot.Jarvis;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -20,9 +21,8 @@ public class MemberManager {
         scheduler.scheduleAtFixedRate(() -> {
             final long time = System.currentTimeMillis();
             members.removeAll(
-                    members.stream().filter(
-                            m -> m.isInactive(time)
-                    ).collect(Collectors.toSet()));
+                    members.stream().filter(CollectiveMember::isInactive).collect(Collectors.toSet()));
+            members.forEach(CollectiveMember::resetActivity);
         }, 5, 5, TimeUnit.MINUTES);
     }
 
@@ -39,6 +39,10 @@ public class MemberManager {
         final CollectiveMember member = new CollectiveMember(memberId,serverId);
         members.add(member);
         return member;
+    }
+
+    public static void addExperience(@NotNull final Map<Long,Long> experience) {
+
     }
 
     public void shutdown() {

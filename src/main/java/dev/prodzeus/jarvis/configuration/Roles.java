@@ -69,19 +69,60 @@ public class Roles {
     }
 
     public void update(@NotNull final String role, final long id) {
-        //todo: Add logic.
+        update(role,id,false);
+    }
+
+    public void update(@NotNull final String role, final long id, final boolean holdUpdate) {
+        switch (role.toLowerCase()) {
+            case "member" -> this.member = id;
+            case "staff" -> this.staff = id;
+            case "level_1" -> this.level_1 = id;
+            case "level_5" -> this.level_5 = id;
+            case "level_10" -> this.level_10 = id;
+            case "level_15" -> this.level_15 = id;
+            case "level_20" -> this.level_20 = id;
+            case "level_25" -> this.level_25 = id;
+            case "level_30" -> this.level_30 = id;
+            case "level_35" -> this.level_35 = id;
+            case "level_40" -> this.level_40 = id;
+            case "level_45" -> this.level_45 = id;
+            case "level_50" -> this.level_50 = id;
+            case "level_55" -> this.level_55 = id;
+            case "level_60" -> this.level_60 = id;
+            case "level_65" -> this.level_65 = id;
+            case "level_70" -> this.level_70 = id;
+            case "level_75" -> this.level_75 = id;
+            case "level_80" -> this.level_80 = id;
+            case "level_85" -> this.level_85 = id;
+            case "level_90" -> this.level_90 = id;
+            case "level_95" -> this.level_95 = id;
+            case "level_100" -> this.level_100 = id;
+            default -> {
+                Jarvis.LOGGER.error("Attempted to update ID for Role {}, but no such Role exists!", role);
+                return;
+            }
+        }
+        if (!holdUpdate) updateDatabase();
+    }
+
+    public void updateDatabase() {
+        Jarvis.DATABASE.saveRoleIds(getRoles());
     }
 
     public static Roles get(final long serverId) {
-        return instances.computeIfAbsent(serverId, Roles::new);
+        if (instances.containsKey(serverId)) return instances.get(serverId);
+        else return instances.put(serverId, new Roles(serverId));
     }
 
     public static RoleIds getRoles(final long serverId) {
-        final Roles roles = get(serverId);
-        return new RoleIds(roles.id, roles.member, roles.staff, roles.level_1, roles.level_5, roles.level_10,
-                roles.level_15, roles.level_20, roles.level_25, roles.level_30, roles.level_35, roles.level_40,
-                roles.level_45, roles.level_50, roles.level_55, roles.level_60, roles.level_65, roles.level_70,
-                roles.level_75, roles.level_80, roles.level_85, roles.level_90, roles.level_95, roles.level_100);
+        return get(serverId).getRoles();
+    }
+
+    public RoleIds getRoles() {
+        return new RoleIds(id, member, staff, level_1, level_5, level_10,
+                level_15, level_20, level_25, level_30, level_35, level_40,
+                level_45, level_50, level_55, level_60, level_65, level_70,
+                level_75, level_80, level_85, level_90, level_95, level_100);
     }
 
     public record RoleIds(long id, Long member, Long staff,

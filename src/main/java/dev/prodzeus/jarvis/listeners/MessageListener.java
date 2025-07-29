@@ -22,12 +22,12 @@ public class MessageListener extends ListenerAdapter {
         final String content = e.getMessage().getContentRaw();
         try {
             if (content.toLowerCase().contains("jarvis")) {
-                final Emoji emoji = Jarvis.BOT.getEmoji("hand_wave");
+                final Emoji emoji = Jarvis.getEmoji("hand_wave");
                 if (emoji != null) e.getMessage().addReaction(emoji).queue();
-                else Jarvis.LOGGER.warn("Attempted to get Emoji but got null instead. Emoji: hand_wave");
+                else Jarvis.LOGGER.error("Attempted to get Emoji but got null instead. Emoji: hand_wave");
             }
         } catch (Exception ex) {
-            Jarvis.LOGGER.warn("Failed to add reaction to message! {}",ex);
+            Jarvis.LOGGER.error("Failed to add reaction to message! {}",ex);
         }
     }
 

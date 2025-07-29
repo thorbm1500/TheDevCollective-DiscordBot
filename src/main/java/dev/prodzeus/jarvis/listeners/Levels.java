@@ -1,7 +1,7 @@
 package dev.prodzeus.jarvis.listeners;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
-import dev.prodzeus.jarvis.configuration.enums.Channel;
+import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
@@ -60,7 +60,7 @@ public class Levels extends ListenerAdapter {
         final String content = e.getMessage().getContentRaw().toLowerCase();
 
         long xp = 1;
-        xp += Math.clamp((content.length()/50),1,4);
+        xp += Math.clamp((content.length() / 50), 1, 4);
 
         if (!e.getMessage().getAttachments().isEmpty()) xp += 1;
 
@@ -72,8 +72,13 @@ public class Levels extends ListenerAdapter {
         final int newLevel = getLevelFromXp(newExperience);
 
         if (collectiveMember.getLevel() < newLevel) {
-            Utils.getTextChannel(Channel.LEVEL.id).sendMessage(content+" %s is now level: **%d**\n-# Current experience: %d"
-                    .formatted(collectiveMember,newLevel,newExperience))
+            final Channels channels = Channels.get(e.getGuild().getIdLong());
+            channels.getChannel(channels.countChannel)
+                    .sendMessage(Jarvis.BOT.getEmojiFormatted("nitro_left_hand")
+                                 + " " + collectiveMember.mention
+                                 + " is now level **%d** ".formatted(newLevel)
+                                 + Jarvis.BOT.getEmojiFormatted("nitro_right_hand")
+                                 +"\n-# **Current experience** %d ".formatted(newExperience) + Jarvis.BOT.getEmojiFormatted("special"))
                     .queue();
             if (newLevel == 1) collectiveMember.addRole(LevelRoles.LEVEL_1);
             else if ((newLevel % 5) == 0) {

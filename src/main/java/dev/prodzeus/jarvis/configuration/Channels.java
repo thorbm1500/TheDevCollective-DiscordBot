@@ -1,6 +1,7 @@
 package dev.prodzeus.jarvis.configuration;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
@@ -29,7 +30,7 @@ public class Channels {
     }
 
     public void update(@NotNull final String channel, final long id) {
-        switch (channel) {
+        switch (channel.toUpperCase()) {
             case "LOG" -> {
                 logChannel = id;
                 Jarvis.DATABASE.saveChannelIds(this.id,new ChannelIds(id,null,null));
@@ -46,8 +47,13 @@ public class Channels {
         }
     }
 
+    public TextChannel getChannel(final long id) {
+        return Jarvis.jda().getTextChannelById(id);
+    }
+
     public static Channels get(final long serverId) {
-        return instances.computeIfAbsent(serverId, Channels::new);
+        if (instances.containsKey(serverId)) return instances.get(serverId);
+        else return instances.put(serverId, new Channels(serverId));
     }
 
     public record ChannelIds(Long log, Long count, Long level) {}

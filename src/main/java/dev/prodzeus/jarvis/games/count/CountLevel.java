@@ -28,10 +28,28 @@ public enum CountLevel {
         this.emoji = emoji;
     }
 
+    public static CountLevel of(final int level) {
+        for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
+            if (lvl.level == level) return lvl;
+        }
+        return level > 9 ? LEVEL_9 : LEVEL_0;
+    }
+
+    public static CountLevel ofRequirement(final int requirement) {
+        for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
+            if (lvl.requirement == requirement) return lvl;
+        }
+        return requirement > LEVEL_9.requirement ? LEVEL_9 : LEVEL_0;
+    }
+
     public static CountLevel getCountLevel(final int counts) {
         for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
             if (lvl.requirement <= counts) return lvl;
         }
         return CountLevel.LEVEL_0;
+    }
+
+    public static int getNextLevelRequirement(final int level) {
+        return of(level+1).requirement;
     }
 }

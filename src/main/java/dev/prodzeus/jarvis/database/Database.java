@@ -15,7 +15,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Map;
 
-//TODO: Update log levels on exceptions
 @SuppressWarnings("unused")
 public class Database {
 
@@ -76,18 +75,19 @@ public class Database {
                     CREATE TABLE IF NOT EXISTS members (
                     `id`               BIGINT UNSIGNED NOT NULL,
                     `server`           BIGINT UNSIGNED NOT NULL,
-                    `level`            INT NOT NULL DEFAULT 0,
+                    `level`            INT UNSIGNED NOT NULL DEFAULT 0,
                     `experience`       BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `correct_counts`   INT NOT NULL DEFAULT 0,
-                    `incorrect_counts` INT NOT NULL DEFAULT 0,
+                    `correct_counts`   INT UNSIGNED NOT NULL DEFAULT 0,
+                    `incorrect_counts` INT UNSIGNED NOT NULL DEFAULT 0,
                     PRIMARY KEY(`id`,`server`))
                     """);
             connection.createStatement().execute("""
                     CREATE TABLE IF NOT EXISTS servers (
                     `id`                      BIGINT UNSIGNED PRIMARY KEY,
-                    `current_count`           INT NOT NULL DEFAULT 1,
-                    `count_highscore`         INT NOT NULL DEFAULT 0,
-                    `time_of_count_highscore` INT NOT NULL DEFAULT 0)
+                    `sync_message`            BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    `current_count`           INT UNSIGNED NOT NULL DEFAULT 1,
+                    `count_highscore`         INT UNSIGNED NOT NULL DEFAULT 0,
+                    `time_of_count_highscore` INT UNSIGNED NOT NULL DEFAULT 0)
                     """);
             connection.createStatement().execute("""
                     CREATE TABLE IF NOT EXISTS channels (
@@ -131,6 +131,30 @@ public class Database {
         }
     }
 
+    @SneakyThrows
+    public void validateServer(final long id) {
+        if (reconnect()) {
+            try {
+                try (var statement = connection.prepareStatement("INSERT IGNORE INTO servers (`id`) VALUES (?)")) {
+                    statement.setLong(1, id);
+                    statement.executeUpdate();
+                }
+                try (var statement = connection.prepareStatement("INSERT IGNORE INTO channels (`id`) VALUES (?)")) {
+                    statement.setLong(1, id);
+                    statement.executeUpdate();
+                }
+                try (var statement = connection.prepareStatement("INSERT IGNORE INTO roles (`id`) VALUES (?)")) {
+                    statement.setLong(1, id);
+                    statement.executeUpdate();
+                }
+                Jarvis.LOGGER.debug("Server {} validated in the database.",id);
+            } catch (Exception e) {
+                connection.rollback();
+                Jarvis.LOGGER.error("Failed to validate server {} in the database! {}",id, e);
+            }
+        } else Jarvis.LOGGER.error("Attempted to validate server {} in the database but failed to connect. Aborting database task...",id);
+    }
+
     public void addMember(final long memberId, final long serverId) {
         if (reconnect()) {
             if (memberExists(memberId, serverId)) return;
@@ -142,8 +166,6 @@ public class Database {
                 Jarvis.LOGGER.debug("Added member to database for server {}.", memberId, serverId);
             } catch (Exception e) {
                 Jarvis.LOGGER.error("Failed to add member {} to database for server {}. {}", memberId, serverId, e);
-            } finally {
-                close();
             }
         } else Jarvis.LOGGER.error("Attempted to add member to database but failed to connect. Aborting database task...");
     }
@@ -181,7 +203,7 @@ public class Database {
     public void updateLevel(final long memberId, final long serverId, final int level) {
         if (reconnect()) {
             try (var statement = connection.prepareStatement("UPDATE members SET level=? WHERE id=? AND server=?")) {
-                statement.setLong(1, level);
+                statement.setLong(1, level < 0 ? 0 : level);
                 statement.setLong(2, memberId);
                 statement.setLong(3, serverId);
                 statement.executeUpdate();
@@ -210,7 +232,7 @@ public class Database {
     public void updateExperience(final long memberId, final long serverId, final long experience) {
         if (reconnect()) {
             try (var statement = connection.prepareStatement("UPDATE members SET experience=? WHERE id=? AND server=?")) {
-                statement.setLong(1, experience);
+                statement.setLong(1, experience < 0 ? 0 : experience);
                 statement.setLong(2, memberId);
                 statement.setLong(3, serverId);
                 statement.executeUpdate();
@@ -331,46 +353,49 @@ public class Database {
             try (var statement = connection.prepareStatement("SELECT log,count,level FROM channels WHERE id=?")) {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
-                return new Channels.ChannelIds(
-                        result.getLong("log"),
-                        result.getLong("count"),
-                        result.getLong("level"));
+                if(result.next()) {
+                    return new Channels.ChannelIds(
+                            result.getLong("log"),
+                            result.getLong("count"),
+                            result.getLong("level"));
+                } else {
+                    Jarvis.LOGGER.error("No channel ids for server {} in database!", serverId);
+                    return new Channels.ChannelIds(0L,0L,0L);
+                }
             } catch (SQLException e) {
                 Jarvis.LOGGER.error("Failed to get channel ids for server {}! {}", serverId, e);
             }
         } else Jarvis.LOGGER.error("Attempted to get channel ids from database for server {} but failed to connect. Aborting database task...", serverId);
-        return new Channels.ChannelIds(null, null, null);
+        return new Channels.ChannelIds(0L, 0L, 0L);
     }
 
     @SneakyThrows
     public void saveChannelIds(final long serverId, @NotNull final Channels.ChannelIds ids) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("UPDATE channels SET ?=? WHERE id=?")) {
-                connection.setAutoCommit(false);
-                statement.setLong(3,serverId);
+            try {
                 if (ids.log() != null) {
-                    statement.setString(1, "log");
-                    statement.setLong(2, ids.log());
-                    statement.addBatch();
+                    try (var statement = connection.prepareStatement("UPDATE channels SET log=? WHERE id=?")) {
+                        statement.setLong(1, ids.log());
+                        statement.setLong(2, serverId);
+                        statement.executeUpdate();
+                    }
                 }
                 if (ids.count() != null) {
-                    statement.setString(1, "count");
-                    statement.setLong(2, ids.count());
-                    statement.addBatch();
+                    try (var statement = connection.prepareStatement("UPDATE channels SET count=? WHERE id=?")) {
+                        statement.setLong(1, ids.count());
+                        statement.setLong(2, serverId);
+                        statement.executeUpdate();
+                    }
                 }
                 if (ids.level() != null) {
-                    statement.setString(1, "level");
-                    statement.setLong(2, ids.level());
-                    statement.addBatch();
+                    try (var statement = connection.prepareStatement("UPDATE channels SET level=? WHERE id=?")) {
+                        statement.setLong(1, ids.level());
+                        statement.setLong(2, serverId);
+                        statement.executeUpdate();
+                    }
                 }
-                statement.executeBatch();
-                connection.commit();
             } catch (SQLException e) {
-                connection.setAutoCommit(true);
-                connection.rollback();
                 Jarvis.LOGGER.error("Failed to save channel ids for server {}! {}", serverId, e);
-            } finally {
-                connection.close();
             }
         } else Jarvis.LOGGER.error("Attempted to save channel ids to database for server {} but failed to connect. Aborting database task...", serverId);
     }
@@ -381,29 +406,34 @@ public class Database {
             try (var statement = connection.prepareStatement("SELECT member,staff,level_1,level_5,level_10,level_15,level_20,level_25,level_30,level_35,level_40,level_45,level_50,level_55,level_60,level_65,level_70,level_75,level_80,level_85,level_90,level_95,level_100 FROM roles WHERE id=?")) {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
-                return new Roles.RoleIds(serverId,result.getLong("member"),result.getLong("staff"),
-                        result.getLong("level_1"),result.getLong("level_5"),result.getLong("level_10"),
-                        result.getLong("level_15"),result.getLong("level_20"),result.getLong("level_25"),
-                        result.getLong("level_30"),result.getLong("level_35"),result.getLong("level_40"),
-                        result.getLong("level_45"),result.getLong("level_50"),result.getLong("level_55"),
-                        result.getLong("level_60"),result.getLong("level_65"),result.getLong("level_70"),
-                        result.getLong("level_75"),result.getLong("level_80"),result.getLong("level_85"),
-                        result.getLong("level_90"),result.getLong("level_95"),result.getLong("level_100"));
+                if (!result.next()) {
+                    return new Roles.RoleIds(serverId,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L
+                    ,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L);
+                } else {
+                    return new Roles.RoleIds(serverId, result.getLong("member"), result.getLong("staff"),
+                            result.getLong("level_1"), result.getLong("level_5"), result.getLong("level_10"),
+                            result.getLong("level_15"), result.getLong("level_20"), result.getLong("level_25"),
+                            result.getLong("level_30"), result.getLong("level_35"), result.getLong("level_40"),
+                            result.getLong("level_45"), result.getLong("level_50"), result.getLong("level_55"),
+                            result.getLong("level_60"), result.getLong("level_65"), result.getLong("level_70"),
+                            result.getLong("level_75"), result.getLong("level_80"), result.getLong("level_85"),
+                            result.getLong("level_90"), result.getLong("level_95"), result.getLong("level_100"));
+                }
             } catch (SQLException e) {
                 Jarvis.LOGGER.error("Failed to get role ids for server {}! {}", serverId, e);
             }
         } else Jarvis.LOGGER.error("Attempted to get role ids from database for server {} but failed to connect. Aborting database task...", serverId);
-        return new Roles.RoleIds(serverId, null, null,null,null,null, null,null,null,
-                null, null,null,null,null, null,null,null,null,null,
-                null, null,null,null,null);
+        return new Roles.RoleIds(serverId, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 
     @SneakyThrows
-    public void saveRoleIds(final long serverId, @NotNull final Roles.RoleIds ids) {
+    public void saveRoleIds(@NotNull final Roles.RoleIds ids) {
         if (reconnect()) {
             try (var statement = connection.prepareStatement("UPDATE channels SET ?=? WHERE id=?")) {
                 connection.setAutoCommit(false);
-                statement.setLong(3,serverId);
+                statement.setLong(3, ids.id());
 
                 statement.setString(1, "member");
                 statement.setLong(2, ids.member());
@@ -478,12 +508,54 @@ public class Database {
                 statement.executeBatch();
                 connection.commit();
             } catch (SQLException e) {
-                connection.setAutoCommit(true);
                 connection.rollback();
-                Jarvis.LOGGER.error("Failed to save role ids for server {}! {}", serverId, e);
+                Jarvis.LOGGER.error("Failed to save role ids for server {}! {}", ids.id(), e);
             } finally {
+                connection.setAutoCommit(true);
                 connection.close();
             }
-        } else Jarvis.LOGGER.error("Attempted to save role ids to database for server {} but failed to connect. Aborting database task...", serverId);
+        } else Jarvis.LOGGER.error("Attempted to save role ids to database for server {} but failed to connect. Aborting database task...", ids.id());
+    }
+
+    public long getSyncMessage(final long id) {
+        if (reconnect()) {
+            try (var statement = connection.prepareStatement("SELECT sync_message FROM servers WHERE id=?")) {
+                statement.setLong(1, id);
+                final ResultSet result = statement.executeQuery();
+                if (result.next()) return result.getLong(1);
+            } catch (Exception e) {
+                Jarvis.LOGGER.error("Failed to get sync message id for server {}! {}", id, e);
+            }
+        } else {
+            Jarvis.LOGGER.error("Attempted to get sync message id for server {} but failed to connect. Aborting database task...", id);
+        }
+        return 0;
+    }
+
+    public void saveSyncMessage(final long serverId, final long messageId) {
+        if (reconnect()) {
+            try (var statement = connection.prepareStatement("UPDATE servers SET sync_message=? WHERE id=?")) {
+                statement.setLong(1, messageId);
+                statement.setLong(2, serverId);
+                statement.executeUpdate();
+            } catch (Exception e) {
+                Jarvis.LOGGER.error("Failed to save sync message id for server {} in database! {}", serverId, e);
+            }
+        } else {
+            Jarvis.LOGGER.error("Attempted to save sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
+        }
+    }
+
+    public void clearSyncMessage(final long serverId) {
+        if (reconnect()) {
+            try (var statement = connection.prepareStatement("UPDATE servers SET sync_message=0 WHERE id=?")) {
+                statement.setLong(1, serverId);
+                statement.executeUpdate();
+            } catch (Exception e) {
+                Jarvis.LOGGER.error("Failed to clear sync message id for server {} in database! {}", serverId, e);
+            }
+        } else {
+            Jarvis.LOGGER.error("Attempted to clear sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
+        }
     }
 }

@@ -1,14 +1,19 @@
 package dev.prodzeus.jarvis.bot;
 
 import dev.prodzeus.jarvis.commands.CommandHandler;
+import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.games.count.CountGameHandler;
+import dev.prodzeus.jarvis.listeners.Levels;
+import dev.prodzeus.jarvis.listeners.MessageListener;
 import dev.prodzeus.jarvis.listeners.Ready;
-import dev.prodzeus.jarvis.listeners.Shutdown;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Icon;
+import net.dv8tion.jda.api.entities.emoji.ApplicationEmoji;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.exceptions.ContextException;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import org.jetbrains.annotations.NotNull;
@@ -16,6 +21,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -24,12 +32,14 @@ import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 public class Bot {
 
     public final JDA jda;
-    public final Map<String, Long> emojis = new HashMap<>();
     public final Set<CachedEmoji> cachedEmojis = new HashSet<>();
 
     public Bot() {
         LOGGER.info("New Jarvis Bot instance created.");
         this.jda = getJda();
+        for (final Guild guild : this.jda.getGuilds()) {
+            Jarvis.DATABASE.validateServer(guild.getIdLong());
+        }
     }
 
     private JDA getJda() {
@@ -45,52 +55,62 @@ public class Bot {
         while (!newJdaInstance.getStatus().equals(JDA.Status.CONNECTED)) {
             try {
                 newJdaInstance.awaitReady();
-            } catch (InterruptedException ignored) {
-            }
+            } catch (InterruptedException ignored) {}
         }
         LOGGER.info("Connected to gateway.");
         return newJdaInstance;
     }
 
-    public void load() {
-        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
-        LOGGER.debug("Loading emojis...");
-        jda.retrieveApplicationEmojis().complete().forEach(emoji -> emojis.put(emoji.getName(), emoji.getIdLong()));
-        loadEmojis();
-        LOGGER.debug("Registering Event Listeners.");
-        jda.addEventListener(new CommandHandler());
-        jda.addEventListener(new CountGameHandler());
-        //jda.addEventListener(new MessageListener());
-        //jda.addEventListener(new Levels());
-        jda.addEventListener(new Shutdown());
-        /*Utils.sendDiscordMessage(LogChannel.LOG, "%s **Enabled**\n-# Since: <t:%d:R>"
-                .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)));
-        LOGGER.registerConsumer(s -> {
-            try {
-                this.jda.getTextChannelById(LogChannel.LOG.id)
-                        .sendMessage("```js\n" + s + "\n```")
-                        .setSuppressedNotifications(true)
-                        .queue(null,
-                                f -> {
-                                    if (f instanceof CancellationException || f instanceof ContextException) return;
-                                    LOGGER.warn("Failed to log message to Discord! {}", f);
-                                });
-            } catch (Exception ignored) {
-            }
-        });*/
+    public synchronized void load() {
+        LOGGER.debug("Loading...");
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(this::loadEmojis);
+        executor.submit(this::registerDiscordConsumers);
+        executor.submit(this::registerListeners);
+        executor.submit(() -> LOGGER.debug("Loading done."));
+        executor.shutdown();
     }
 
     public void shutdown() {
-        if (jda == null) return;
-        if (jda.getStatus() == JDA.Status.SHUTTING_DOWN) {
-            try {
-                Thread.sleep(5000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        if (jda != null && jda.getStatus() != JDA.Status.SHUTTING_DOWN) jda.shutdown();
+        Jarvis.shutdown();
+    }
+
+    private void loadEmojis() {
+        LOGGER.debug("Loading emojis...");
+        try {
+            for (final ApplicationEmoji emoji : jda.retrieveApplicationEmojis().complete(true)) {
+                cachedEmojis.add(CachedEmoji.cache(emoji));
             }
-        } else {
-            jda.shutdownNow();
+            loadAndCompareEmojis();
+        } catch (Exception e) {
+            LOGGER.error("Error caught when loading Emojis! {}", e);
         }
+    }
+
+    private void loadAndCompareEmojis() {
+        final HashMap<String, Icon> localEmojis = getLocalEmojis();
+        boolean newUploads = false;
+
+        for (final Map.Entry<String, Icon> localEmoji : localEmojis.entrySet()) {
+            if (cachedEmojis.stream().anyMatch(cached -> cached.equals(localEmoji.getKey()))) {
+                LOGGER.debug("Emoji {} already exists. Skipping...", localEmoji.getKey());
+            } else if (localEmoji.getKey().length() <= 32) {
+                try {
+                    cachedEmojis.add(CachedEmoji.cache(
+                            jda.createApplicationEmoji(localEmoji.getKey(), localEmoji.getValue())
+                                    .complete(true)));
+                    if (!newUploads) newUploads = true;
+                    LOGGER.info("Emoji {} successfully uploaded to Jarvis.", localEmoji.getKey());
+                } catch (Exception e) {
+                    LOGGER.error("Failed to update Emoji {}! {}", localEmoji.getKey(), e);
+                }
+            } else {
+                LOGGER.error("Emoji names must be shorter than 32! Emoji {} has a length of {}!", localEmoji.getKey(), localEmoji.getKey().length());
+            }
+        }
+        if (!newUploads) LOGGER.info("All emojis loaded and up-to-date.");
+        else validateEmojis(localEmojis.keySet());
     }
 
     private HashMap<String, Icon> getLocalEmojis() {
@@ -127,43 +147,24 @@ public class Bot {
         return emojis;
     }
 
-    private void loadEmojis() {
-        final HashMap<String, Icon> localEmojis = getLocalEmojis();
-        jda.retrieveApplicationEmojis().complete().forEach(emoji -> cachedEmojis.add(CachedEmoji.cache(emoji)));
-        for (final var index : localEmojis.entrySet()) {
-            if (cachedEmojis.stream().anyMatch(emoji -> index.getKey().equalsIgnoreCase(emoji.name()))) {
-                LOGGER.debug("Emoji {} already exists. Skipping...", index.getKey());
-            } else {
-                LOGGER.info("Uploading Emoji {} to Jarvis.", index.getKey());
-                uploadEmoji(index);
-            }
-        }
-        if (validateEmojis(localEmojis.keySet())) LOGGER.info("All emojis loaded and up-to-date.");
-        else LOGGER.warn("Inconsistent emojis found. Please check that all emojis are correct and restart the Bot after.");
-    }
-
-    private boolean validateEmojis(final Set<String> localEmojis) {
-        LOGGER.debug("Validating emojis...");
-        if (cachedEmojis.stream().allMatch(emoji -> localEmojis.contains(emoji.name()))) return true;
-        else {
+    private void validateEmojis(final Set<String> localEmojis) {
+        LOGGER.info("Validating emojis...");
+        if (cachedEmojis.stream().allMatch(emoji -> localEmojis.contains(emoji.name()))) {
+            LOGGER.info("Validation completed! All emojis loaded and up-to-date.");
+        } else {
             boolean errors = false;
             final List<String> cachedEmojiNames = new ArrayList<>();
-            cachedEmojis.forEach(emoji -> cachedEmojiNames.add(emoji.name()));
+            for (final CachedEmoji emoji : cachedEmojis) {
+                cachedEmojiNames.add(emoji.name());
+            }
             for (final String localEmojiName : localEmojis) {
                 if (!cachedEmojiNames.contains(localEmojiName)) {
-                    LOGGER.warn("Emoji {} missing from Jarvis.", localEmojiName);
                     errors = true;
+                    LOGGER.warn("Emoji {} missing from Jarvis.", localEmojiName);
                 }
             }
-            return !errors;
-        }
-    }
-
-    private void uploadEmoji(@NotNull final Map.Entry<String, Icon> emoji) {
-        try {
-            CachedEmoji.cache(jda.createApplicationEmoji(emoji.getKey(), emoji.getValue()).submit().get());
-        } catch (Exception e) {
-            LOGGER.warn("Failed to upload Emoji {} to Jarvis! {}", emoji.getKey(), e);
+            if (errors) LOGGER.warn("Ensure to delete any invalid emojis from resources and restart the Bot after!");
+            else LOGGER.info("Validation completed! All emojis loaded and up-to-date.");
         }
     }
 
@@ -182,5 +183,38 @@ public class Bot {
     @Nullable
     public CachedEmoji getCachedEmoji(final String name) {
         return cachedEmojis.stream().filter(emoji -> emoji.name().equals(name)).findFirst().orElse(null);
+    }
+
+    private void registerDiscordConsumers() {
+        for (final Guild guild : jda.getGuilds()) {
+            final long logId = Channels.get(guild.getIdLong()).logChannel;
+            if (logId != 0L) {
+                LOGGER.registerConsumer(s -> {
+                    try {
+                        this.jda.getTextChannelById(logId)
+                                .sendMessage("```js\n" + s + "\n```")
+                                .setSuppressedNotifications(true)
+                                .queue(null,
+                                        f -> {
+                                            if (f instanceof CancellationException || f instanceof ContextException) return;
+                                            LOGGER.error("Failed to log message to Discord! {}", f);
+                                        });
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to log message to Discord! {}",e);
+                    }
+                });
+                jda.getTextChannelById(logId).sendMessage("%s **Enabled**\n-# Since: <t:%d:R>"
+                                .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)))
+                        .queue(null, f -> LOGGER.error("Failed to send 'Online' message to Log Channel!"));
+            }
+        }
+    }
+
+    private void registerListeners() {
+        LOGGER.debug("Registering Event Listeners.");
+        jda.addEventListener(new CommandHandler());
+        jda.addEventListener(new CountGameHandler());
+        jda.addEventListener(new MessageListener());
+        jda.addEventListener(new Levels());
     }
 }

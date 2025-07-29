@@ -6,6 +6,9 @@ public class CountPlayer implements Comparable<CountPlayer> {
 
     public final long id;
     public int counts = 0;
+    public boolean wrongCount = false;
+
+    public long experience = 0L;
 
     public CountPlayer(final long id) {
         this.id = id;
