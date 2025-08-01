@@ -10,11 +10,17 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.thorbm1500:Logger:bebd0d2bc1'
+    implementation 'com.github.thorbm1500:Logger:cb283750ca'
     implementation 'com.mysql:mysql-connector-j:9.3.0'
     implementation 'net.dv8tion:JDA:6.0.0-rc.1'
     compileOnly 'org.projectlombok:lombok:1.18.38'
     annotationProcessor 'org.projectlombok:lombok:1.18.38'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 application {

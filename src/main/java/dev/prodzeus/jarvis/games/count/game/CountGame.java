@@ -2,7 +2,6 @@ package dev.prodzeus.jarvis.games.count.game;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.configuration.Channels;
-import dev.prodzeus.jarvis.enums.ServerCount;
 import dev.prodzeus.jarvis.games.count.CountGameHandler;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
@@ -11,13 +10,19 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Serial;
+import java.io.Serializable;
+import java.sql.SQLData;
+import java.sql.SQLException;
+import java.sql.SQLInput;
+import java.sql.SQLOutput;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 import static dev.prodzeus.jarvis.games.count.CountGameHandler.formatPercentage;
 
-public final class CountGame {
+public class CountGame {
 
     private final boolean enabled;
     private final long serverId;
@@ -25,20 +30,16 @@ public final class CountGame {
     private final TextChannel channel;
     private long sync = 0L;
 
-    private long latestPlayer = 0L;
-    private int currentNumber;
-    private final Map<Long, CountPlayer> counts = new HashMap<>();
+    private final CountGameData data;
 
-    private boolean highscoreAnnounced = false;
-    private int highscore;
-    private long timeOfHighscore;
-
-    private final List<CountPlayer> countPlayers = new ArrayList<>();
-
-    public CountGame(final long serverId) {
+    public CountGame(final long serverId, @NotNull final CountGameData data) {
         LOGGER.debug("New Count Game instance created for server {}!", serverId);
         this.serverId = serverId;
         this.channelId = Channels.get(serverId).countChannel;
+        this.data = data;
+        LOGGER.debug("Count data loaded for server {}\nCurrent: {}\nLatest Player: {}\nHighscore: {}\nTime of Highscore: {}\nPlayers: {}",
+                serverId, data.currentCount, data.latestPlayer, data.highscore, data.timeOfHighscore, data.getPlayers());
+
         if (this.channelId == 0) {
             this.channel = null;
             LOGGER.error("Could not find Count channel for server {}! Is the channel's ID registered?", serverId);
@@ -52,10 +53,6 @@ public final class CountGame {
             return;
         }
 
-        final ServerCount count = Jarvis.DATABASE.getServerCountStats(serverId);
-        this.currentNumber = count.current();
-        this.highscore = count.highscore();
-        this.timeOfHighscore = count.epochTime();
         sync = Jarvis.DATABASE.getSyncMessage(serverId);
         if (sync != 0) {
             final long oldSyncId = sync;
@@ -64,7 +61,7 @@ public final class CountGame {
             sync = 0;
         }
         channel.sendMessage("## %s Game Sync\nNext number: **%d**"
-                        .formatted(Jarvis.getEmojiFormatted("sync"), currentNumber))
+                        .formatted(Jarvis.getEmojiFormatted("sync"), data.currentCount))
                 .queue(s -> {
                     this.sync = s.getIdLong();
                     Jarvis.DATABASE.saveSyncMessage(serverId, this.sync);
@@ -72,7 +69,7 @@ public final class CountGame {
     }
 
     public void save() {
-        Jarvis.DATABASE.saveServerCountStats(new ServerCount(serverId, currentNumber, highscore, timeOfHighscore));
+        Jarvis.DATABASE.saveCountGameData(data);
         LOGGER.info("Count data saved to database for server {}!", serverId);
     }
 
@@ -95,7 +92,7 @@ public final class CountGame {
             return;
         }
 
-        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(event.getAuthor().getIdLong(),serverId);
+        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(event.getAuthor().getIdLong(), serverId);
 
         if (!canPlay(collectiveMember)) return;
 
@@ -107,42 +104,35 @@ public final class CountGame {
         }
 
         String text;
-        if (countedNumber == currentNumber++) {
+        if (data.isCountCorrect(countedNumber)) {
             deleteWarningMessage(channel);
             collectiveMember.incrementCorrectCounts();
-            counts.computeIfAbsent(collectiveMember.id, CountPlayer::new).counts++;
+            data.incrementCount(collectiveMember.id);
             final String streak = computeStreak(event) ? " " + CountGameHandler.streak : "";
             text = "### " + collectiveMember.mention + " **"
                    + countedNumber + "** "
-                   + (countedNumber > highscore ? CountGameHandler.trophy : streak) + "\n-# "
-                   + (streak.isEmpty() ? collectiveMember.getCountLevelIcon() : (countedNumber > highscore ? streak : "")) + " •  "
+                   + (data.isNewHighscore(countedNumber) ? CountGameHandler.trophy : streak) + "\n-# "
+                   + (streak.isEmpty() ? collectiveMember.getCountLevelIcon() : (data.isNewHighscore(countedNumber) ? streak : "")) + " •  "
                    + CountGameHandler.correctCountEmoji + " **"
                    + collectiveMember.getCorrectCounts() + "**  "
                    + CountGameHandler.incorrectCountEmoji + " **"
                    + collectiveMember.getIncorrectCounts() + "**  •  "
                    + CountGameHandler.beta;
-            if (countedNumber > highscore) {
-                if (!highscoreAnnounced) {
-                    highscoreAnnounced = true;
-                    text = text + CountGameHandler.newHighscoreText.formatted(collectiveMember.mention, countedNumber, highscore, timeOfHighscore);
+            if (data.isNewHighscore(countedNumber)) {
+                if (!data.highscoreAnnounced) {
+                    data.highscoreAnnounced = true;
+                    text = text + CountGameHandler.newHighscoreText.formatted(collectiveMember.mention, countedNumber, data.highscore, data.timeOfHighscore);
                 }
-                highscore = countedNumber;
-                timeOfHighscore = event.getMessage().getTimeCreated().toEpochSecond();
+                data.highscore = countedNumber;
+                data.timeOfHighscore = event.getMessage().getTimeCreated().toEpochSecond();
             }
         } else {
-            currentNumber--;
-            counts.computeIfAbsent(collectiveMember.id, CountPlayer::new).wrongCount = true;
+            data.wrongCount(collectiveMember.id);
             //if (currentNumber == 1) return;
             collectiveMember.incrementIncorrectCounts();
-            try {
-                Collections.sort(countPlayers);
-            } catch (Exception e) {
-                LOGGER.warn("Attempted to sort list of count players but failed! {}", e);
-                return;
-            }
-            final String scoreText = highscoreAnnounced ? "New Highscore" : "Score";
-            final String scoreEmoji = highscoreAnnounced ? CountGameHandler.trophy : "";
-            final Leaderboard leaderboard = new Leaderboard(currentNumber, counts);
+            final String scoreText = data.highscoreAnnounced ? "New Highscore" : "Score";
+            final String scoreEmoji = data.highscoreAnnounced ? CountGameHandler.trophy : "";
+            final Leaderboard leaderboard = data.getLeaderboard();
             final CountPlayer firstPlace = leaderboard.removeFirst();
             try {
                 if (firstPlace != null) {
@@ -150,23 +140,23 @@ public final class CountGame {
                     if (secondPlace != null) {
                         final CountPlayer thirdPlace = leaderboard.removeFirst();
                         if (thirdPlace != null) {
-                            text = CountGameHandler.gameOverText.formatted(scoreText, currentNumber, scoreEmoji, collectiveMember.mention,
-                                    "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(currentNumber, firstPlace.counts),
-                                    "<@" + secondPlace.id + ">", secondPlace.counts, secondPlace.experience, formatPercentage(currentNumber, secondPlace.counts),
-                                    "<@" + thirdPlace.id + ">", thirdPlace.counts, thirdPlace.experience, formatPercentage(currentNumber, thirdPlace.counts), countPlayers.size());
+                            text = CountGameHandler.gameOverText.formatted(scoreText, data.currentCount, scoreEmoji, collectiveMember.mention,
+                                    "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(data.currentCount, firstPlace.counts),
+                                    "<@" + secondPlace.id + ">", secondPlace.counts, secondPlace.experience, formatPercentage(data.currentCount, secondPlace.counts),
+                                    "<@" + thirdPlace.id + ">", thirdPlace.counts, thirdPlace.experience, formatPercentage(data.currentCount, thirdPlace.counts), data.size());
                         } else {
-                            text = CountGameHandler.gameOverText.formatted(scoreText, currentNumber, scoreEmoji, collectiveMember.mention,
-                                    "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(currentNumber, firstPlace.counts),
-                                    "<@" + secondPlace.id + ">", secondPlace.counts, secondPlace.experience, formatPercentage(currentNumber, secondPlace.counts),
+                            text = CountGameHandler.gameOverText.formatted(scoreText, data.currentCount, scoreEmoji, collectiveMember.mention,
+                                    "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(data.currentCount, firstPlace.counts),
+                                    "<@" + secondPlace.id + ">", secondPlace.counts, secondPlace.experience, formatPercentage(data.currentCount, secondPlace.counts),
                                     "N/A", "N/A", "N/A", 0);
                         }
                     } else {
-                        text = CountGameHandler.gameOverText.formatted(scoreText, currentNumber, scoreEmoji, collectiveMember.mention,
-                                "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(currentNumber, firstPlace.counts),
+                        text = CountGameHandler.gameOverText.formatted(scoreText, data.currentCount, scoreEmoji, collectiveMember.mention,
+                                "<@" + firstPlace.id + ">", firstPlace.counts, firstPlace.experience, formatPercentage(data.currentCount, firstPlace.counts),
                                 "N/A", "N/A", "N/A",
                                 "N/A", "N/A", "N/A", 0);
                     }
-                } else text = CountGameHandler.gameOverText.formatted(scoreText, currentNumber, scoreEmoji, collectiveMember.mention,
+                } else text = CountGameHandler.gameOverText.formatted(scoreText, data.currentCount, scoreEmoji, collectiveMember.mention,
                         "N/A", "N/A", "N/A",
                         "N/A", "N/A", "N/A",
                         "N/A", "N/A", "N/A", 0);
@@ -174,10 +164,9 @@ public final class CountGame {
                 LOGGER.error("Attempted to format GameOver string for count but failed! {}", e);
                 return;
             }
-            if (highscoreAnnounced) {
-                highscoreAnnounced = false;
+            if (data.highscoreAnnounced) {
                 channel.getManager()
-                        .setTopic("Server Highscore: %d".formatted(highscore))
+                        .setTopic("Server Highscore: %d".formatted(data.highscore))
                         .queue(null, f -> LOGGER.warn("RestAction failed! Attempted to send new highscore message, and update topic to new highscore, but failed. {}", f));
             }
             reset();
@@ -190,7 +179,7 @@ public final class CountGame {
     }
 
     private boolean canPlay(final CollectiveMember member) {
-        if (this.latestPlayer == member.id) {
+        if (data.latestPlayer == member.id) {
             if (warningMessage == 0L) {
                 channel.sendMessage("%s You can't count twice in a row!".formatted(Jarvis.getEmojiFormatted("red_exclamation")))
                         .queue(s -> {
@@ -200,7 +189,6 @@ public final class CountGame {
             }
             return false;
         } else {
-            this.latestPlayer = member.id;
             return true;
         }
     }
@@ -224,10 +212,10 @@ public final class CountGame {
         return times.stream().allMatch(time -> (time + 60000) > compareTime);
     }
 
-    private static class Leaderboard extends ArrayList<CountPlayer> {
+    public static class Leaderboard extends ArrayList<CountPlayer> {
 
-        public Leaderboard(final int currentCount, @NotNull final Map<Long, CountPlayer> players) {
-            super(players.values());
+        public Leaderboard(final int currentCount, @NotNull final CountGameData data) {
+            super(data.getPlayers());
             Collections.sort(this);
             calculateAndAwardExperience(currentCount);
         }
@@ -270,10 +258,93 @@ public final class CountGame {
         return wrongCount ? xp - 25 : xp;
     }
 
+    public static class CountGameData extends HashMap<Long, CountPlayer> implements Serializable, SQLData {
+
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        public final long id;
+
+        public long latestPlayer = 0L;
+        public int currentCount = 1;
+
+        public boolean highscoreAnnounced = false;
+        public int highscore = 0;
+        public long timeOfHighscore = 0;
+
+        public CountGameData(final long id, final long latestPlayer, final int currentCount, final int highscore, final long timeOfHighscore) {
+            this.id = id;
+            this.latestPlayer = latestPlayer;
+            this.currentCount = currentCount;
+            this.highscore = highscore;
+            this.timeOfHighscore = timeOfHighscore;
+        }
+
+        public CountGameData(final long id) {
+            this(id,0,0,0,0);
+        }
+
+        public @NotNull CountPlayer getPlayer(final long id) {
+            if (containsKey(id)) return get(id);
+            else return put(id, new CountPlayer(id));
+        }
+
+        public boolean isCountCorrect(final int count) {
+            return count == currentCount;
+        }
+
+        public boolean isNewHighscore(final int count) {
+            return count > highscore;
+        }
+
+        public void incrementCount(final long id) {
+            latestPlayer = id;
+            currentCount++;
+            getPlayer(id).counts++;
+        }
+
+        public void wrongCount(final long id) {
+            latestPlayer = id;
+            getPlayer(id).wrongCount = true;
+        }
+
+        public Collection<CountPlayer> getPlayers() {
+            return values();
+        }
+
+        public Leaderboard getLeaderboard() {
+            return new Leaderboard(currentCount, this);
+        }
+
+        @Override
+        public int size() {
+            return values().size();
+        }
+
+        public void reset() {
+            clear();
+            currentCount = 1;
+        }
+
+        @Override
+        public String getSQLTypeName() throws SQLException {
+            return "";
+        }
+
+        @Override
+        public void readSQL(SQLInput stream, String typeName) throws SQLException {
+
+        }
+
+        @Override
+        public void writeSQL(SQLOutput stream) throws SQLException {
+
+        }
+    }
+
     private void reset() {
-        currentNumber = 1;
         save();
         playerStreaks.clear();
-        countPlayers.clear();
+        data.reset();
     }
 }

@@ -17,20 +17,17 @@ import java.util.Set;
 
 public class Jarvis {
 
-    private static final SLF4JProvider SLF4J;
     public static final Logger LOGGER;
     public static final Database DATABASE;
     public static final Bot BOT;
     private static final Set<Runnable> shutdownHooks = new HashSet<>();
 
     static {
-        SLF4J = new SLF4JProvider();
-        LOGGER = SLF4J.getLoggerFactory().getLogger("Jarvis");
+        LOGGER = getSLF4J().getLoggerFactory().getLogger("Jarvis");
         LOGGER.setLevel(Level.valueOf(System.getenv("LOG_LEVEL")));
         DATABASE = new Database();
         LOGGER.info("Jarvis loading...");
         BOT = new Bot();
-        Runtime.getRuntime().addShutdownHook(new Thread(BOT::shutdown));
     }
 
     public static void main(String[] args) {
@@ -43,10 +40,13 @@ public class Jarvis {
     }
 
     public static synchronized void shutdown() {
-        LOGGER.clearConsumers();
         LOGGER.info("JDA disconnected. Jarvis shutting down...");
         shutdownHooks.forEach(Runnable::run);
         Jarvis.LOGGER.info("Goodbye!");
+    }
+
+    public static SLF4JProvider getSLF4J() {
+        return SLF4JProvider.get();
     }
 
     public static JDA jda() {

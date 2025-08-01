@@ -36,7 +36,7 @@ public class CountGameHandler extends ListenerAdapter {
     }
 
     private void newGame(@NotNull final Guild guild) {
-        new CountGame(guild.getIdLong());
+        new CountGame(guild.getIdLong(),Jarvis.DATABASE.getCountGameData(guild.getIdLong()));
     }
 
     public static void addGame(final long id, @NotNull final CountGame game) {
@@ -49,7 +49,7 @@ public class CountGameHandler extends ListenerAdapter {
 
     private CountGame getGame(final long serverId) {
         if (games.containsKey(serverId)) return games.get(serverId);
-        else return games.put(serverId,new CountGame(serverId));
+        else return games.put(serverId,new CountGame(serverId,Jarvis.DATABASE.getCountGameData(serverId)));
     }
 
     private static @NotNull String getGameOverText() {

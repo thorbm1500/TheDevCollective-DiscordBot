@@ -5,15 +5,24 @@ import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.configuration.Roles;
 import dev.prodzeus.jarvis.enums.Counts;
 import dev.prodzeus.jarvis.enums.ServerCount;
+import dev.prodzeus.jarvis.games.count.game.CountGame;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import lombok.SneakyThrows;
+import net.dv8tion.jda.api.entities.Guild;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.Map;
+
+import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 
 @SuppressWarnings("unused")
 public class Database {
@@ -28,12 +37,12 @@ public class Database {
     private final String password = env.getOrDefault("DB_PASSWORD", "None.");
 
     public Database() {
-        Jarvis.LOGGER.debug("New Database instance called. Connecting to database...");
+        LOGGER.debug("New Database instance called. Connecting to database...");
         if (connect()) {
-            Jarvis.LOGGER.info("Database Connected.");
+            LOGGER.info("Database Connected.");
             createTables();
         } else {
-            Jarvis.LOGGER.error("Attempt unsuccessful. Connection to database failed. Shutting down!");
+            LOGGER.error("Establishing a connection to the database failed. Shutting down!..");
             Jarvis.BOT.jda.shutdown();
         }
     }
@@ -42,7 +51,7 @@ public class Database {
         try {
             connection = DriverManager.getConnection("jdbc:mysql://%s:%s/%s".formatted(host, port, databaseName), user, password);
         } catch (SQLException e) {
-            Jarvis.LOGGER.error("Connection to the database failed. {}", e);
+            LOGGER.error("Failed to connect to the database. {}", e);
             return false;
         }
         return true;
@@ -50,55 +59,75 @@ public class Database {
 
     private boolean reconnect() {
         try {
-            if (connection == null || connection.isClosed()) return connect();
+            if (connection == null || connection.isClosed()) {
+                if (connect()) {
+                    LOGGER.trace("Reconnected to the database.");
+                    return true;
+                }
+            }
         } catch (SQLException e) {
-            Jarvis.LOGGER.error("Reconnection to the database failed. {}", e);
+            LOGGER.error("Failed to reconnect to the database. {}", e);
             return false;
         }
-        return true;
+        LOGGER.error("Failed to reconnect to the database.");
+        return false;
     }
 
     private void close() {
         try {
             connection.close();
             if (!connection.isClosed()) {
-                Jarvis.LOGGER.error("Failed to close connection to the database. Connection was found to still be open!");
-            } else Jarvis.LOGGER.debug("Closed connection to the database.");
+                LOGGER.error("Failed to close connection to the database. Connection was found to still be open!");
+            } else LOGGER.trace("Closed connection to the database.");
         } catch (SQLException e) {
-            Jarvis.LOGGER.error("Failed to close connection to the database. {}", e);
+            LOGGER.error("Failed to close connection to the database. {}", e);
         }
     }
 
     private void createTables() {
         try {
             connection.createStatement().execute("""
-                    CREATE TABLE IF NOT EXISTS members (
-                    `id`               BIGINT UNSIGNED NOT NULL,
-                    `server`           BIGINT UNSIGNED NOT NULL,
-                    `level`            INT UNSIGNED NOT NULL DEFAULT 0,
-                    `experience`       BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `correct_counts`   INT UNSIGNED NOT NULL DEFAULT 0,
-                    `incorrect_counts` INT UNSIGNED NOT NULL DEFAULT 0,
-                    PRIMARY KEY(`id`,`server`))
+                    CREATE TABLE IF NOT EXISTS servers (
+                    `server_id` BIGINT UNSIGNED NOT NULL,
+                    PRIMARY KEY (`server_id`))
                     """);
             connection.createStatement().execute("""
-                    CREATE TABLE IF NOT EXISTS servers (
-                    `id`                      BIGINT UNSIGNED PRIMARY KEY,
-                    `sync_message`            BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `current_count`           INT UNSIGNED NOT NULL DEFAULT 1,
-                    `count_highscore`         INT UNSIGNED NOT NULL DEFAULT 0,
-                    `time_of_count_highscore` INT UNSIGNED NOT NULL DEFAULT 0)
+                    CREATE TABLE IF NOT EXISTS members (
+                    `member_id`          BIGINT UNSIGNED NOT NULL,
+                    `server_id`          BIGINT UNSIGNED NOT NULL,
+                    `level`              INT UNSIGNED NOT NULL DEFAULT 0,
+                    `experience`         BIGINT NOT NULL DEFAULT 0,
+                    `correct_counts`     INT UNSIGNED NOT NULL DEFAULT 0,
+                    `incorrect_counts`   INT UNSIGNED NOT NULL DEFAULT 0,
+                    `images_sent`        INT UNSIGNED NOT NULL DEFAULT 0,
+                    `reactions_given`    INT UNSIGNED NOT NULL DEFAULT 0,
+                    `reactions_received` INT UNSIGNED NOT NULL DEFAULT 0,
+                    PRIMARY KEY (`member_id`,`server_id`),
+                    FOREIGN KEY (`server_id`) REFERENCES servers(`server_id`))
+                    """);
+            connection.createStatement().execute("""
+                    CREATE TABLE IF NOT EXISTS count_data (
+                    `server_id`         BIGINT UNSIGNED NOT NULL,
+                    `sync_message`      BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    `latest_player_id`  BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    `current_count`     INT UNSIGNED NOT NULL DEFAULT 1,
+                    `count_highscore`   INT UNSIGNED NOT NULL DEFAULT 0,
+                    `time_of_highscore` INT UNSIGNED NOT NULL DEFAULT 0,
+                    PRIMARY KEY (`server_id`),
+                    FOREIGN KEY (`server_id`) REFERENCES servers(`server_id`))
                     """);
             connection.createStatement().execute("""
                     CREATE TABLE IF NOT EXISTS channels (
-                    `id`    BIGINT UNSIGNED PRIMARY KEY,
-                    `log`   BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `count` BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `level` BIGINT UNSIGNED NOT NULL DEFAULT 0)
+                    `server_id` BIGINT UNSIGNED NOT NULL,
+                    `log`       BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    `count`     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    `level`     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    PRIMARY KEY (`server_id`),
+                    FOREIGN KEY (`server_id`) REFERENCES servers(`server_id`))
                     """);
             connection.createStatement().execute("""
                     CREATE TABLE IF NOT EXISTS roles (
-                    `id`        BIGINT UNSIGNED PRIMARY KEY,
+                    `server_id` BIGINT UNSIGNED NOT NULL,
                     `member`    BIGINT UNSIGNED NOT NULL DEFAULT 0,
                     `staff`     BIGINT UNSIGNED NOT NULL DEFAULT 0,
                     `level_1`   BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -121,67 +150,85 @@ public class Database {
                     `level_85`  BIGINT UNSIGNED NOT NULL DEFAULT 0,
                     `level_90`  BIGINT UNSIGNED NOT NULL DEFAULT 0,
                     `level_95`  BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    `level_100` BIGINT UNSIGNED NOT NULL DEFAULT 0)
+                    `level_100` BIGINT UNSIGNED NOT NULL DEFAULT 0,
+                    PRIMARY KEY (`server_id`),
+                    FOREIGN KEY (`server_id`) REFERENCES servers(`server_id`))
                     """);
-            Jarvis.LOGGER.debug("Database Tables validated.");
+            LOGGER.debug("Database Tables validated.");
         } catch (SQLException e) {
-            Jarvis.LOGGER.error("Failed to create database tables. {}", e);
+            LOGGER.error("Failed to create database tables. {}", e);
         } finally {
             close();
         }
     }
 
     @SneakyThrows
-    public void validateServer(final long id) {
+    public void validateServers(@NotNull final Collection<Guild> guilds) {
         if (reconnect()) {
-            try {
-                try (var statement = connection.prepareStatement("INSERT IGNORE INTO servers (`id`) VALUES (?)")) {
-                    statement.setLong(1, id);
-                    statement.executeUpdate();
+            try (var statement = connection.prepareStatement("INSERT IGNORE INTO servers VALUES (?)")) {
+                for (final Guild guild : guilds) {
+                    statement.setLong(1, guild.getIdLong());
+                    statement.addBatch();
+                    LOGGER.trace("Server {}, added to batch for table 'servers' in the database.", guild.getIdLong());
                 }
-                try (var statement = connection.prepareStatement("INSERT IGNORE INTO channels (`id`) VALUES (?)")) {
-                    statement.setLong(1, id);
-                    statement.executeUpdate();
-                }
-                try (var statement = connection.prepareStatement("INSERT IGNORE INTO roles (`id`) VALUES (?)")) {
-                    statement.setLong(1, id);
-                    statement.executeUpdate();
-                }
-                Jarvis.LOGGER.debug("Server {} validated in the database.",id);
-            } catch (Exception e) {
-                connection.rollback();
-                Jarvis.LOGGER.error("Failed to validate server {} in the database! {}",id, e);
+                statement.executeBatch();
+                LOGGER.trace("Batch executed for table 'servers' in the database.");
             }
-        } else Jarvis.LOGGER.error("Attempted to validate server {} in the database but failed to connect. Aborting database task...",id);
+            try (var statement = connection.prepareStatement("INSERT IGNORE INTO count_data(`server_id`) VALUES (?)")) {
+                for (final Guild guild : guilds) {
+                    statement.setLong(1, guild.getIdLong());
+                    statement.addBatch();
+                    LOGGER.trace("Server {}, added to batch for table 'count_data' in the database.", guild.getIdLong());
+                }
+                statement.executeBatch();
+                LOGGER.trace("Batch executed for table 'count_data' in the database.");
+            }
+            try (var statement = connection.prepareStatement("INSERT IGNORE INTO channels(`server_id`) VALUES (?)")) {
+                for (final Guild guild : guilds) {
+                    statement.setLong(1, guild.getIdLong());
+                    statement.addBatch();
+                    LOGGER.trace("Server {}, added to batch for table 'channels' in the database.", guild.getIdLong());
+                }
+                statement.executeBatch();
+                LOGGER.trace("Batch executed for table 'channels' in the database.");
+            }
+            try (var statement = connection.prepareStatement("INSERT IGNORE INTO roles(`server_id`) VALUES (?)")) {
+                for (final Guild guild : guilds) {
+                    statement.setLong(1, guild.getIdLong());
+                    statement.addBatch();
+                    LOGGER.trace("Server {}, added to batch for table 'roles' in the database.", guild.getIdLong());
+                }
+                statement.executeBatch();
+                LOGGER.trace("Batch executed for table 'roles' in the database.");
+            }
+            LOGGER.debug("All servers validated in the database.");
+        } else LOGGER.error("Attempted to validate all servers in the database but failed to connect. Aborting database task...");
     }
 
     public void addMember(final long memberId, final long serverId) {
         if (reconnect()) {
-            if (memberExists(memberId, serverId)) return;
-
-            try (var statement = connection.prepareStatement("INSERT INTO members (`id`,`server`) VALUES (?,?)")) {
+            try (var statement = connection.prepareStatement("INSERT IGNORE INTO members (`member_id`,`server_id`) VALUES (?,?)")) {
                 statement.setLong(1, memberId);
                 statement.setLong(2, serverId);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Added member to database for server {}.", memberId, serverId);
+                LOGGER.trace("Added member {} to database for server {}.", memberId, serverId);
             } catch (Exception e) {
-                Jarvis.LOGGER.error("Failed to add member {} to database for server {}. {}", memberId, serverId, e);
+                LOGGER.error("Failed to add member {} to database for server {}. {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to add member to database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to add member to database but failed to connect. Aborting database task...");
     }
 
     public boolean memberExists(final long memberId, final long serverId) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("SELECT * FROM members WHERE id=? AND server=?")) {
+            try (var statement = connection.prepareStatement("SELECT `level` FROM members WHERE id=? AND server=?")) {
                 statement.setLong(1, memberId);
                 statement.setLong(2, serverId);
                 ResultSet result = statement.executeQuery();
                 return result.next();
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to check for member {} in database for server {}! {}", memberId, serverId, e);
-                return true;
+                LOGGER.error("Failed to check for member {} in database for server {}! {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to check if member exists in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to check if member exists in database but failed to connect. Aborting database task...");
         return true;
     }
 
@@ -192,26 +239,26 @@ public class Database {
                 statement.setLong(2, serverId);
                 ResultSet result = statement.executeQuery();
                 if (result.next()) return result.getInt("level");
-                else Jarvis.LOGGER.debug("No level found for member {} in database for server {}!", memberId, serverId);
+                else LOGGER.debug("No level found for member {} in database for server {}!", memberId, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get level for member {} in database for server {}! {}", memberId, serverId, e);
+                LOGGER.error("Failed to get level for member {} in database for server {}! {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get level for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to get level for member in database but failed to connect. Aborting database task...");
         return 0;
     }
 
     public void updateLevel(final long memberId, final long serverId, final int level) {
         if (reconnect()) {
             try (var statement = connection.prepareStatement("UPDATE members SET level=? WHERE id=? AND server=?")) {
-                statement.setLong(1, level < 0 ? 0 : level);
+                statement.setLong(1, Math.max(level, 0));
                 statement.setLong(2, memberId);
                 statement.setLong(3, serverId);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Updated level for member {} to {} for server {}", memberId, level, serverId);
+                LOGGER.debug("Updated level for member {} to {} for server {}", memberId, level, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to update level with {}xp for member {} in database for server {}! {}", level, memberId, serverId, e);
+                LOGGER.error("Failed to update level with {}xp for member {} in database for server {}! {}", level, memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to update level for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to update level for member in database but failed to connect. Aborting database task...");
     }
 
     public long getExperience(final long memberId, final long serverId) {
@@ -221,11 +268,11 @@ public class Database {
                 statement.setLong(2, serverId);
                 ResultSet result = statement.executeQuery();
                 if (result.next()) return result.getLong("experience");
-                else Jarvis.LOGGER.debug("No experience found for member {} in database for server {}!", memberId, serverId);
+                else LOGGER.debug("No experience found for member {} in database for server {}!", memberId, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get experience for member {} in database for server {}! {}", memberId, serverId, e);
+                LOGGER.error("Failed to get experience for member {} in database for server {}! {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get experience for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to get experience for member in database but failed to connect. Aborting database task...");
         return 0;
     }
 
@@ -236,11 +283,11 @@ public class Database {
                 statement.setLong(2, memberId);
                 statement.setLong(3, serverId);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Updated experience for member {} to {} for server {}", memberId, experience, serverId);
+                LOGGER.debug("Updated experience for member {} to {} for server {}", memberId, experience, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to update experience with {}xp for member {} in database for server {}! {}", experience, memberId, serverId, e);
+                LOGGER.error("Failed to update experience with {}xp for member {} in database for server {}! {}", experience, memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to update experience for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to update experience for member in database but failed to connect. Aborting database task...");
     }
 
     public void incrementCorrectCount(final long memberId, final long serverId) {
@@ -249,11 +296,11 @@ public class Database {
                 statement.setLong(1, memberId);
                 statement.setLong(2, serverId);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Correct Count incremented for member {} in database for server {}", memberId, serverId);
+                LOGGER.debug("Correct Count incremented for member {} in database for server {}", memberId, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to increment correct count for member {} in database for server {}. {}", memberId, serverId, e);
+                LOGGER.error("Failed to increment correct count for member {} in database for server {}. {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to increment correct counts for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to increment correct counts for member in database but failed to connect. Aborting database task...");
     }
 
     public void incrementIncorrectCount(final long memberId, final long serverId) {
@@ -262,11 +309,11 @@ public class Database {
                 statement.setLong(1, memberId);
                 statement.setLong(2, serverId);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Incorrect Count incremented for member {} in database for server {}", memberId, serverId);
+                LOGGER.debug("Incorrect Count incremented for member {} in database for server {}", memberId, serverId);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to increment incorrect count for member {} in database for server {}. {}", memberId, serverId, e);
+                LOGGER.error("Failed to increment incorrect count for member {} in database for server {}. {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to increment incorrect counts for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to increment incorrect counts for member in database but failed to connect. Aborting database task...");
     }
 
     @NotNull
@@ -283,9 +330,9 @@ public class Database {
                 ResultSet result = statement.executeQuery();
                 if (result.next()) return new Counts(result.getInt("correct_counts"), result.getInt("incorrect_counts"));
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get counts for member {} in the database for server {}. {}", memberId, serverId, e);
+                LOGGER.error("Failed to get counts for member {} in the database for server {}. {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get counts for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to get counts for member in database but failed to connect. Aborting database task...");
         return new Counts(0, 0);
     }
 
@@ -302,9 +349,9 @@ public class Database {
                 statement.setLong(4, serverId);
                 statement.executeUpdate();
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to save counts for member {} in the database for server {}. {}", memberId, serverId, e);
+                LOGGER.error("Failed to save counts for member {} in the database for server {}. {}", memberId, serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to save counts for member in database but failed to connect. Aborting database task...");
+        } else LOGGER.error("Attempted to save counts for member in database but failed to connect. Aborting database task...");
     }
 
     public int getServerMemberCount(final long serverId) {
@@ -313,38 +360,80 @@ public class Database {
                 final ResultSet resultSet = statement.executeQuery();
                 if (resultSet.next()) return resultSet.getInt("member_count");
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get member count for server {}! {}", serverId, e);
+                LOGGER.error("Failed to get member count for server {}! {}", serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get member count from database for server {} but failed to connect. Aborting database task...", serverId);
+        } else LOGGER.error("Attempted to get member count from database for server {} but failed to connect. Aborting database task...", serverId);
         return 0;
     }
 
     public ServerCount getServerCountStats(final long serverId) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("SELECT current_count,count_highscore,time_of_count_highscore FROM servers WHERE id=?")) {
+            try (var statement = connection.prepareStatement("SELECT current_count,count_highscore,time_of_count_highscore FROM count_data WHERE id=?")) {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
                 if (result.next()) return new ServerCount(serverId, result.getInt("current_count"), result.getInt("count_highscore"), result.getLong("time_of_count_highscore"));
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get count stats for server {}! {}", serverId, e);
+                LOGGER.error("Failed to get count stats for server {}! {}", serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get count stats from database for server {} but failed to connect. Aborting database task...", serverId);
+        } else LOGGER.error("Attempted to get count stats from database for server {} but failed to connect. Aborting database task...", serverId);
         return new ServerCount(serverId, 0, 0, 0);
     }
 
-    public void saveServerCountStats(@NotNull final ServerCount serverCount) {
+    public void saveServerCountStats(@NotNull final CountGame.CountGameData data) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("UPDATE servers SET current_count=?,count_highscore=?,time_of_count_highscore=? WHERE id=?")) {
-                statement.setInt(1, serverCount.current());
-                statement.setInt(2, serverCount.highscore());
-                statement.setLong(3, serverCount.epochTime());
-                statement.setLong(4, serverCount.id());
+            try (var statement = connection.prepareStatement("UPDATE count_data SET current_count=?,count_highscore=?,time_of_count_highscore=? WHERE id=?")) {
+                statement.setInt(1, data.currentCount);
+                statement.setInt(2, data.highscore);
+                statement.setLong(3, data.timeOfHighscore);
+                statement.setLong(4, data.id);
                 statement.executeUpdate();
-                Jarvis.LOGGER.debug("Saved counts stats for server {} in database.", serverCount.id());
+                LOGGER.debug("Saved counts stats for server {} in database.", data.id);
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to save count stats for server {}! {}", serverCount.id(), e);
+                LOGGER.error("Failed to save count stats for server {}! {}", data.id, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to save count stats from database for server {} but failed to connect. Aborting database task...", serverCount.id());
+        } else LOGGER.error("Attempted to save count stats from database for server {} but failed to connect. Aborting database task...", data.id);
+    }
+
+    public void saveCountGameData(final CountGame.CountGameData data) {
+        if (reconnect()) {
+            byte[] gameData;
+            try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
+                ObjectOutputStream object = new ObjectOutputStream(stream);
+                object.writeObject(data);
+                gameData = stream.toByteArray();
+            } catch (Exception e) {
+                LOGGER.error("Failed to serialize game data for server {}! {}", data.id, e);
+                return;
+            }
+            try (var statement = connection.prepareStatement("UPDATE count_data SET game_data=? WHERE id=?")) {
+                statement.setBytes(1, gameData);
+                statement.setLong(2, data.id);
+                statement.executeUpdate();
+                LOGGER.debug("Saved count game data for server {} in database.", data.id);
+            } catch (SQLException e) {
+                LOGGER.error("Failed to save count game data for server {}! {}", data.id, e);
+            }
+        } else LOGGER.error("Attempted to save count game data for server {} but failed to connect. Aborting database task...", data.id);
+    }
+
+    @SneakyThrows
+    public @NotNull CountGame.CountGameData getCountGameData(final long id) {
+        if (reconnect()) {
+            try (var statement = connection.prepareStatement("SELECT game_data FROM count_data WHERE id=? IS NOT NULL")) {
+                statement.setLong(1, id);
+                final ResultSet result = statement.executeQuery();
+                if (result.next()) {
+                    try (ObjectInputStream stream = new ObjectInputStream(new ByteArrayInputStream(result.getBytes("game_data")))) {
+                        if (stream.available() > 0) return (CountGame.CountGameData) stream.readObject();
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to deserialize game data for server {}! {}", id, e);
+                    }
+                }
+            }
+        } else {
+            LOGGER.error("Attempted to get count game data for server {} but failed to connect. Aborting database task...", id);
+        }
+        return new CountGame.CountGameData(id);
     }
 
     @NotNull
@@ -353,19 +442,19 @@ public class Database {
             try (var statement = connection.prepareStatement("SELECT log,count,level FROM channels WHERE id=?")) {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
-                if(result.next()) {
+                if (result.next()) {
                     return new Channels.ChannelIds(
                             result.getLong("log"),
                             result.getLong("count"),
                             result.getLong("level"));
                 } else {
-                    Jarvis.LOGGER.error("No channel ids for server {} in database!", serverId);
-                    return new Channels.ChannelIds(0L,0L,0L);
+                    LOGGER.error("No channel ids for server {} in database!", serverId);
+                    return new Channels.ChannelIds(0L, 0L, 0L);
                 }
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get channel ids for server {}! {}", serverId, e);
+                LOGGER.error("Failed to get channel ids for server {}! {}", serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get channel ids from database for server {} but failed to connect. Aborting database task...", serverId);
+        } else LOGGER.error("Attempted to get channel ids from database for server {} but failed to connect. Aborting database task...", serverId);
         return new Channels.ChannelIds(0L, 0L, 0L);
     }
 
@@ -395,9 +484,9 @@ public class Database {
                     }
                 }
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to save channel ids for server {}! {}", serverId, e);
+                LOGGER.error("Failed to save channel ids for server {}! {}", serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to save channel ids to database for server {} but failed to connect. Aborting database task...", serverId);
+        } else LOGGER.error("Attempted to save channel ids to database for server {} but failed to connect. Aborting database task...", serverId);
     }
 
     @NotNull
@@ -407,8 +496,8 @@ public class Database {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
                 if (!result.next()) {
-                    return new Roles.RoleIds(serverId,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L
-                    ,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L);
+                    return new Roles.RoleIds(serverId, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L
+                            , 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
                 } else {
                     return new Roles.RoleIds(serverId, result.getLong("member"), result.getLong("staff"),
                             result.getLong("level_1"), result.getLong("level_5"), result.getLong("level_10"),
@@ -420,9 +509,9 @@ public class Database {
                             result.getLong("level_90"), result.getLong("level_95"), result.getLong("level_100"));
                 }
             } catch (SQLException e) {
-                Jarvis.LOGGER.error("Failed to get role ids for server {}! {}", serverId, e);
+                LOGGER.error("Failed to get role ids for server {}! {}", serverId, e);
             }
-        } else Jarvis.LOGGER.error("Attempted to get role ids from database for server {} but failed to connect. Aborting database task...", serverId);
+        } else LOGGER.error("Attempted to get role ids from database for server {} but failed to connect. Aborting database task...", serverId);
         return new Roles.RoleIds(serverId, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null);
@@ -509,53 +598,53 @@ public class Database {
                 connection.commit();
             } catch (SQLException e) {
                 connection.rollback();
-                Jarvis.LOGGER.error("Failed to save role ids for server {}! {}", ids.id(), e);
+                LOGGER.error("Failed to save role ids for server {}! {}", ids.id(), e);
             } finally {
                 connection.setAutoCommit(true);
                 connection.close();
             }
-        } else Jarvis.LOGGER.error("Attempted to save role ids to database for server {} but failed to connect. Aborting database task...", ids.id());
+        } else LOGGER.error("Attempted to save role ids to database for server {} but failed to connect. Aborting database task...", ids.id());
     }
 
     public long getSyncMessage(final long id) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("SELECT sync_message FROM servers WHERE id=?")) {
+            try (var statement = connection.prepareStatement("SELECT sync_message FROM count_data WHERE id=?")) {
                 statement.setLong(1, id);
                 final ResultSet result = statement.executeQuery();
                 if (result.next()) return result.getLong(1);
             } catch (Exception e) {
-                Jarvis.LOGGER.error("Failed to get sync message id for server {}! {}", id, e);
+                LOGGER.error("Failed to get sync message id for server {}! {}", id, e);
             }
         } else {
-            Jarvis.LOGGER.error("Attempted to get sync message id for server {} but failed to connect. Aborting database task...", id);
+            LOGGER.error("Attempted to get sync message id for server {} but failed to connect. Aborting database task...", id);
         }
         return 0;
     }
 
     public void saveSyncMessage(final long serverId, final long messageId) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("UPDATE servers SET sync_message=? WHERE id=?")) {
+            try (var statement = connection.prepareStatement("UPDATE count_data SET sync_message=? WHERE id=?")) {
                 statement.setLong(1, messageId);
                 statement.setLong(2, serverId);
                 statement.executeUpdate();
             } catch (Exception e) {
-                Jarvis.LOGGER.error("Failed to save sync message id for server {} in database! {}", serverId, e);
+                LOGGER.error("Failed to save sync message id for server {} in database! {}", serverId, e);
             }
         } else {
-            Jarvis.LOGGER.error("Attempted to save sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
+            LOGGER.error("Attempted to save sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
         }
     }
 
     public void clearSyncMessage(final long serverId) {
         if (reconnect()) {
-            try (var statement = connection.prepareStatement("UPDATE servers SET sync_message=0 WHERE id=?")) {
+            try (var statement = connection.prepareStatement("UPDATE count_data SET sync_message=0 WHERE id=?")) {
                 statement.setLong(1, serverId);
                 statement.executeUpdate();
             } catch (Exception e) {
-                Jarvis.LOGGER.error("Failed to clear sync message id for server {} in database! {}", serverId, e);
+                LOGGER.error("Failed to clear sync message id for server {} in database! {}", serverId, e);
             }
         } else {
-            Jarvis.LOGGER.error("Attempted to clear sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
+            LOGGER.error("Attempted to clear sync message id for server {} in database but failed to connect. Aborting database task...", serverId);
         }
     }
 }

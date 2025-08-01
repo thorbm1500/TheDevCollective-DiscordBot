@@ -2,7 +2,13 @@ package dev.prodzeus.jarvis.games.count.game;
 
 import org.jetbrains.annotations.NotNull;
 
-public class CountPlayer implements Comparable<CountPlayer> {
+import java.io.Serial;
+import java.io.Serializable;
+
+public class CountPlayer implements Comparable<CountPlayer>, Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     public final long id;
     public int counts = 0;

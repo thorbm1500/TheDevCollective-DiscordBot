@@ -73,12 +73,12 @@ public class Levels extends ListenerAdapter {
 
         if (collectiveMember.getLevel() < newLevel) {
             final Channels channels = Channels.get(e.getGuild().getIdLong());
-            channels.getChannel(channels.countChannel)
-                    .sendMessage(Jarvis.BOT.getEmojiFormatted("nitro_left_hand")
+            channels.getChannel(channels.levelChannel)
+                    .sendMessage(Jarvis.getEmojiFormatted("nitro_left_hand")
                                  + " " + collectiveMember.mention
                                  + " is now level **%d** ".formatted(newLevel)
-                                 + Jarvis.BOT.getEmojiFormatted("nitro_right_hand")
-                                 +"\n-# **Current experience** %d ".formatted(newExperience) + Jarvis.BOT.getEmojiFormatted("special"))
+                                 + Jarvis.getEmojiFormatted("nitro_right_hand")
+                                 +"\n-# **Current experience** %d ".formatted(newExperience) + Jarvis.getEmojiFormatted("special"))
                     .queue();
             if (newLevel == 1) collectiveMember.addRole(LevelRoles.LEVEL_1);
             else if ((newLevel % 5) == 0) {

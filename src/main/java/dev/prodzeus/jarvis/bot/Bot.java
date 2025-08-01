@@ -5,23 +5,24 @@ import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.games.count.CountGameHandler;
 import dev.prodzeus.jarvis.listeners.Levels;
+import dev.prodzeus.jarvis.listeners.LogListener;
 import dev.prodzeus.jarvis.listeners.MessageListener;
 import dev.prodzeus.jarvis.listeners.Ready;
+import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Icon;
 import net.dv8tion.jda.api.entities.emoji.ApplicationEmoji;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
-import net.dv8tion.jda.api.exceptions.ContextException;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import net.dv8tion.jda.internal.utils.JDALogger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.jar.JarEntry;
@@ -36,10 +37,9 @@ public class Bot {
 
     public Bot() {
         LOGGER.info("New Jarvis Bot instance created.");
+        JDALogger.setFallbackLoggerEnabled(false);
         this.jda = getJda();
-        for (final Guild guild : this.jda.getGuilds()) {
-            Jarvis.DATABASE.validateServer(guild.getIdLong());
-        }
+        Jarvis.DATABASE.validateServers(this.jda.getGuilds());
     }
 
     private JDA getJda() {
@@ -48,8 +48,11 @@ public class Bot {
                 .addEventListeners(new Ready())
                 .setAutoReconnect(true)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT,
-                        GatewayIntent.GUILD_EXPRESSIONS)
-                .enableCache(CacheFlag.EMOJI, CacheFlag.STICKER)
+                        GatewayIntent.GUILD_EXPRESSIONS,
+                        GatewayIntent.GUILD_PRESENCES)
+                .enableCache(CacheFlag.EMOJI,
+                        CacheFlag.CLIENT_STATUS,
+                        CacheFlag.ACTIVITY)
                 .build();
         LOGGER.info("Connecting to gateway...");
         while (!newJdaInstance.getStatus().equals(JDA.Status.CONNECTED)) {
@@ -62,6 +65,7 @@ public class Bot {
     }
 
     public synchronized void load() {
+        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
         LOGGER.debug("Loading...");
         final ExecutorService executor = Executors.newSingleThreadExecutor();
         executor.submit(this::loadEmojis);
@@ -76,16 +80,13 @@ public class Bot {
         Jarvis.shutdown();
     }
 
+    @SneakyThrows
     private void loadEmojis() {
         LOGGER.debug("Loading emojis...");
-        try {
-            for (final ApplicationEmoji emoji : jda.retrieveApplicationEmojis().complete(true)) {
-                cachedEmojis.add(CachedEmoji.cache(emoji));
-            }
-            loadAndCompareEmojis();
-        } catch (Exception e) {
-            LOGGER.error("Error caught when loading Emojis! {}", e);
+        for (final ApplicationEmoji emoji : jda.retrieveApplicationEmojis().complete(true)) {
+            cachedEmojis.add(CachedEmoji.cache(emoji));
         }
+        loadAndCompareEmojis();
     }
 
     private void loadAndCompareEmojis() {
@@ -113,27 +114,21 @@ public class Bot {
         else validateEmojis(localEmojis.keySet());
     }
 
+    @SneakyThrows
     private HashMap<String, Icon> getLocalEmojis() {
         final HashMap<String, Icon> emojis = new HashMap<>();
         final Set<String> resourcePaths = new HashSet<>();
-        String jarPath;
-        try {
-            jarPath = getClass().getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-        } catch (Exception e) {
-            LOGGER.error("Failed to get path of Jar! {}", e);
-            return emojis;
-        }
+        final String jarPath = getClass().getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+        if (jarPath == null) return emojis;
         LOGGER.debug("Loading Jar at path: {}", jarPath);
-        try (final JarFile jar = new JarFile(jarPath)) {
-            LOGGER.debug("JarFile loaded: {}", jar.getName());
-            final Iterator<JarEntry> iterator = jar.entries().asIterator();
-            while (iterator.hasNext()) {
-                final JarEntry entry = iterator.next();
-                if (!entry.isDirectory() && entry.getName().startsWith("emoji/")) resourcePaths.add("/" + entry.getName());
-            }
-        } catch (Exception e) {
-            LOGGER.error("Jar entry reading failed at path /{}! {}", jarPath, e);
+        final JarFile jar = new JarFile(jarPath);
+        LOGGER.debug("JarFile loaded: {}", jar.getName());
+        final Iterator<JarEntry> iterator = jar.entries().asIterator();
+        while (iterator.hasNext()) {
+            final JarEntry entry = iterator.next();
+            if (!entry.isDirectory() && entry.getName().startsWith("emoji/")) resourcePaths.add("/" + entry.getName());
         }
+        jar.close();
         for (final String path : resourcePaths) {
             try (InputStream stream = getClass().getResourceAsStream(path)) {
                 if (stream != null) {
@@ -185,24 +180,12 @@ public class Bot {
         return cachedEmojis.stream().filter(emoji -> emoji.name().equals(name)).findFirst().orElse(null);
     }
 
+    @SneakyThrows
     private void registerDiscordConsumers() {
         for (final Guild guild : jda.getGuilds()) {
             final long logId = Channels.get(guild.getIdLong()).logChannel;
             if (logId != 0L) {
-                LOGGER.registerConsumer(s -> {
-                    try {
-                        this.jda.getTextChannelById(logId)
-                                .sendMessage("```js\n" + s + "\n```")
-                                .setSuppressedNotifications(true)
-                                .queue(null,
-                                        f -> {
-                                            if (f instanceof CancellationException || f instanceof ContextException) return;
-                                            LOGGER.error("Failed to log message to Discord! {}", f);
-                                        });
-                    } catch (Exception e) {
-                        LOGGER.error("Failed to log message to Discord! {}",e);
-                    }
-                });
+                Jarvis.getSLF4J().registerListener(new LogListener(logId), LOGGER);
                 jda.getTextChannelById(logId).sendMessage("%s **Enabled**\n-# Since: <t:%d:R>"
                                 .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)))
                         .queue(null, f -> LOGGER.error("Failed to send 'Online' message to Log Channel!"));
