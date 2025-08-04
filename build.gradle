@@ -10,7 +10,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.thorbm1500:Logger:cb283750ca'
+    implementation 'com.github.thorbm1500:Logger:87e128d406'
     implementation 'com.mysql:mysql-connector-j:9.3.0'
     implementation 'net.dv8tion:JDA:6.0.0-rc.1'
     compileOnly 'org.projectlombok:lombok:1.18.38'

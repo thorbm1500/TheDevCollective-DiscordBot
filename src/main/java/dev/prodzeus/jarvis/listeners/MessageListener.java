@@ -7,13 +7,9 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.jetbrains.annotations.NotNull;
 
-import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
-
 public class MessageListener extends ListenerAdapter {
 
-    public MessageListener() {
-        LOGGER.debug("New Message Listener created.");
-    }
+    public MessageListener() {}
 
     @Override
     public void onMessageReceived(@NotNull MessageReceivedEvent e) {

@@ -1,10 +1,8 @@
 package dev.prodzeus.jarvis.member;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -21,7 +19,9 @@ public class MemberManager {
         scheduler.scheduleAtFixedRate(() -> {
             final long time = System.currentTimeMillis();
             members.removeAll(
-                    members.stream().filter(CollectiveMember::isInactive).collect(Collectors.toSet()));
+                    members.stream()
+                            .filter(CollectiveMember::isInactive)
+                            .collect(Collectors.toSet()));
             members.forEach(CollectiveMember::resetActivity);
         }, 5, 5, TimeUnit.MINUTES);
     }
@@ -31,18 +31,18 @@ public class MemberManager {
         Jarvis.registerShutdownHook(this::shutdown);
     }
 
-    @NotNull
-    public static synchronized CollectiveMember getCollectiveMember(final long memberId, final long serverId) {
-        for (final CollectiveMember member : members) {
-            if (member.id == memberId && member.server == serverId) return member;
+    public static synchronized CollectiveMember getCollectiveMember(final long serverId, final long memberId) {
+        try {
+            for (final CollectiveMember member : members) {
+                if (member.id == memberId && member.server == serverId) return member;
+            }
+            final CollectiveMember member = new CollectiveMember(memberId, serverId);
+            members.add(member);
+            return member;
+        } catch (Exception e) {
+            Jarvis.LOGGER.error("Failed to get Collective Member! {}", e);
+            return null;
         }
-        final CollectiveMember member = new CollectiveMember(memberId,serverId);
-        members.add(member);
-        return member;
-    }
-
-    public static void addExperience(@NotNull final Map<Long,Long> experience) {
-
     }
 
     public void shutdown() {

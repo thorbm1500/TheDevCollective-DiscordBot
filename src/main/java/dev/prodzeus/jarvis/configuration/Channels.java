@@ -2,59 +2,99 @@ package dev.prodzeus.jarvis.configuration;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Channels {
+public final class Channels {
 
     private static final Map<Long, Channels> instances = new HashMap<>();
 
     private final long id;
+    private final EnumMap<DevChannel,Long> channels;
+    
+    public enum DevChannel {
+        LOG,
+        COUNT,
+        LEVEL
+        ;
 
-    public long logChannel = 0L;
-    public long countChannel = 0L;
-    public long levelChannel = 0L;
+        public static @Nullable DevChannel of(@NotNull final String value) {
+            try {
+                return DevChannel.valueOf(value);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
+        public long getChannelId(final long serverId) {
+            return Channels.get(serverId).getChannelId(this);
+        }
+    }
 
     private Channels(final long serverId) {
         if (instances.containsKey(serverId)) {
             throw new IllegalStateException("Channels instance already exists for server %d!".formatted(serverId));
         }
-        this.id = serverId;
-        final ChannelIds ids = Jarvis.DATABASE.getChannelIds(serverId);
-        if (ids.log != null) this.logChannel = ids.log;
-        if (ids.count != null) this.countChannel = ids.count;
-        if (ids.level != null) this.levelChannel = ids.level;
-        instances.put(this.id,this);
-    }
 
-    public void update(@NotNull final String channel, final long id) {
-        switch (channel.toUpperCase()) {
-            case "LOG" -> {
-                logChannel = id;
-                Jarvis.DATABASE.saveChannelIds(this.id,new ChannelIds(id,null,null));
-            }
-            case "COUNT" -> {
-                countChannel = id;
-                Jarvis.DATABASE.saveChannelIds(this.id,new ChannelIds(null,id,null));
-            }
-            case "LEVEL" -> {
-                levelChannel = id;
-                Jarvis.DATABASE.saveChannelIds(this.id,new ChannelIds(null,null,id));
-            }
-            default -> Jarvis.LOGGER.warn("Unknown channel type. Cannot update channel id!");
+        this.id = serverId;
+        channels = Jarvis.DATABASE.getChannelIds(this.id);
+
+        synchronized (instances) {
+            instances.put(this.id,this);
         }
     }
 
-    public TextChannel getChannel(final long id) {
+    public boolean save() {
+        return Jarvis.DATABASE.saveChannelIds(this.id,channels);
+    }
+
+    public static boolean update(final long serverId, @NotNull final EnumMap<DevChannel,Long> updates) {
+        return get(serverId).update(updates);
+    }
+
+    public boolean update(@NotNull final EnumMap<DevChannel,Long> updates) {
+        channels.putAll(updates);
+        return save();
+    }
+
+    public static boolean update(final long serverId, @NotNull final DevChannel channel, final long id) {
+        return get(serverId).update(channel,id);
+    }
+
+    public boolean update(@NotNull final DevChannel channel, final long id) {
+        channels.put(channel,id);
+        return Jarvis.DATABASE.updateChannelId(this.id,channel,id);
+    }
+
+    @Contract(pure = true)
+    public static long getChannelId(final long serverId, @NotNull final DevChannel channel) {
+        return Channels.get(serverId).getChannelId(channel);
+    }
+
+    @Contract(pure = true)
+    public long getChannelId(@NotNull final DevChannel channel) {
+        return channels.getOrDefault(channel,0L);
+    }
+
+    public static @Nullable TextChannel getChannel(final long serverId, @NotNull final DevChannel channel) {
+        return get(serverId).getChannel(channel);
+    }
+
+    public @Nullable TextChannel getChannel(@NotNull final DevChannel channel) {
+        return getChannel(getChannelId(channel));
+    }
+
+    public static @Nullable TextChannel getChannel(final long id) {
         return Jarvis.jda().getTextChannelById(id);
     }
 
-    public static Channels get(final long serverId) {
+    public static @NotNull Channels get(final long serverId) {
         if (instances.containsKey(serverId)) return instances.get(serverId);
-        else return instances.put(serverId, new Channels(serverId));
+        else return new Channels(serverId);
     }
-
-    public record ChannelIds(Long log, Long count, Long level) {}
 }

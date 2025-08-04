@@ -2,22 +2,22 @@ package dev.prodzeus.jarvis.listeners;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.configuration.Channels;
-import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
+import dev.prodzeus.jarvis.configuration.Roles;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
-import dev.prodzeus.jarvis.utils.Utils;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.internal.utils.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
-@SuppressWarnings("unused")
 public class Levels extends ListenerAdapter {
-
-    private static final String confetti = Jarvis.BOT.getEmojiFormatted("confetti");
 
     private static final Pattern regex = Pattern.compile(":[^\\s:][^:]*?:");
     private static final List<Long> levels;
@@ -52,9 +52,10 @@ public class Levels extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent e) {
-        if (e.isWebhookMessage() || !Utils.isUser(e.getAuthor())) return;
+        if (e.isWebhookMessage() || !(e.getAuthor().isBot() || e.getAuthor().isSystem())) return;
 
-        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(e.getAuthor().getIdLong(), e.getGuild().getIdLong());
+        final long guildId = e.getGuild().getIdLong();
+        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(e.getAuthor().getIdLong(), guildId);
         if (collectiveMember.isOnCooldown()) return;
 
         final String content = e.getMessage().getContentRaw().toLowerCase();
@@ -68,23 +69,31 @@ public class Levels extends ListenerAdapter {
         xp += Math.min(emojis * 2, 8);
         if (e.getMember().isBoosting()) xp *= 2;
 
-        final long newExperience = collectiveMember.getExperience() + xp;
+        final Pair<Long,Long> expAndLevel = collectiveMember.getData(CollectiveMember.MemberData.EXPERIENCE, CollectiveMember.MemberData.LEVEL);
+        final long newExperience = expAndLevel.getLeft() + xp;
         final int newLevel = getLevelFromXp(newExperience);
 
-        if (collectiveMember.getLevel() < newLevel) {
-            final Channels channels = Channels.get(e.getGuild().getIdLong());
-            channels.getChannel(channels.levelChannel)
+        if (expAndLevel.getRight() < newLevel) {
+            final Collection<Role> add = HashSet.newHashSet(1);
+            final Collection<Role> remove = HashSet.newHashSet(1);
+            if (newLevel == 1) {
+                add.add(Roles.getLevelRole(guildId,1));
+            } else if (newLevel == 5) {
+                add.add(Roles.getLevelRole(guildId,5));
+                remove.add(Roles.getLevelRole(guildId,1));
+            } else if ((newLevel % 5) == 0) {
+                add.add(Roles.getLevelRole(guildId,newLevel));
+                remove.add(Roles.getLevelRole(guildId,newLevel));
+            }
+            Channels.get(collectiveMember.server)
+                    .getChannel(Channels.DevChannel.LEVEL)
                     .sendMessage(Jarvis.getEmojiFormatted("nitro_left_hand")
                                  + " " + collectiveMember.mention
                                  + " is now level **%d** ".formatted(newLevel)
                                  + Jarvis.getEmojiFormatted("nitro_right_hand")
                                  +"\n-# **Current experience** %d ".formatted(newExperience) + Jarvis.getEmojiFormatted("special"))
+                    .and(e.getGuild().modifyMemberRoles(e.getMember(),add,remove))
                     .queue();
-            if (newLevel == 1) collectiveMember.addRole(LevelRoles.LEVEL_1);
-            else if ((newLevel % 5) == 0) {
-                collectiveMember.removeRole(LevelRoles.getLevelId(newLevel - 5));
-                collectiveMember.addRole(LevelRoles.getLevelId(newLevel));
-            }
         }
         collectiveMember.updateExperienceAndLevel(newLevel, newExperience);
     }

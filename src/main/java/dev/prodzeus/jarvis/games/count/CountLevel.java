@@ -18,38 +18,38 @@ public enum CountLevel {
     LEVEL_9(9,10000,"count_level_9")
     ;
 
-    public final int level;
-    public final int requirement;
+    public final long level;
+    public final long requirement;
     public final String emoji;
 
-    CountLevel(final int level, final int requirement, @NotNull final String emoji) {
+    CountLevel(final long level, final long requirement, @NotNull final String emoji) {
         this.level = level;
         this.requirement = requirement;
         this.emoji = emoji;
     }
 
-    public static CountLevel of(final int level) {
+    public static CountLevel of(final long level) {
         for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
             if (lvl.level == level) return lvl;
         }
         return level > 9 ? LEVEL_9 : LEVEL_0;
     }
 
-    public static CountLevel ofRequirement(final int requirement) {
+    public static CountLevel ofRequirement(final long requirement) {
         for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
             if (lvl.requirement == requirement) return lvl;
         }
         return requirement > LEVEL_9.requirement ? LEVEL_9 : LEVEL_0;
     }
 
-    public static CountLevel getCountLevel(final int counts) {
+    public static CountLevel getCountLevel(final long counts) {
         for(final CountLevel lvl : Arrays.stream(values()).toList().reversed()) {
             if (lvl.requirement <= counts) return lvl;
         }
         return CountLevel.LEVEL_0;
     }
 
-    public static int getNextLevelRequirement(final int level) {
+    public static long getNextLevelRequirement(final long level) {
         return of(level+1).requirement;
     }
 }

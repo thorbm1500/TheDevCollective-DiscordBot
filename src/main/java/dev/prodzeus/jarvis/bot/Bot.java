@@ -1,34 +1,28 @@
 package dev.prodzeus.jarvis.bot;
 
 import dev.prodzeus.jarvis.commands.CommandHandler;
-import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
-import dev.prodzeus.jarvis.games.count.CountGameHandler;
+import dev.prodzeus.jarvis.listeners.GuildListener;
 import dev.prodzeus.jarvis.listeners.Levels;
-import dev.prodzeus.jarvis.listeners.LogListener;
 import dev.prodzeus.jarvis.listeners.MessageListener;
 import dev.prodzeus.jarvis.listeners.Ready;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Icon;
 import net.dv8tion.jda.api.entities.emoji.ApplicationEmoji;
-import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import net.dv8tion.jda.internal.utils.JDALogger;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
+import static dev.prodzeus.jarvis.bot.Jarvis.registerDiscordConsumers;
 
 public class Bot {
 
@@ -39,7 +33,6 @@ public class Bot {
         LOGGER.info("New Jarvis Bot instance created.");
         JDALogger.setFallbackLoggerEnabled(false);
         this.jda = getJda();
-        Jarvis.DATABASE.validateServers(this.jda.getGuilds());
     }
 
     private JDA getJda() {
@@ -47,18 +40,16 @@ public class Bot {
         final JDA newJdaInstance = JDABuilder.createDefault(System.getenv("TOKEN"))
                 .addEventListeners(new Ready())
                 .setAutoReconnect(true)
-                .enableIntents(GatewayIntent.MESSAGE_CONTENT,
-                        GatewayIntent.GUILD_EXPRESSIONS,
-                        GatewayIntent.GUILD_PRESENCES)
-                .enableCache(CacheFlag.EMOJI,
-                        CacheFlag.CLIENT_STATUS,
-                        CacheFlag.ACTIVITY)
+                .enableIntents(EnumSet.allOf(GatewayIntent.class))
+                .enableCache(EnumSet.allOf(CacheFlag.class))
+                .setBulkDeleteSplittingEnabled(false)
                 .build();
         LOGGER.info("Connecting to gateway...");
         while (!newJdaInstance.getStatus().equals(JDA.Status.CONNECTED)) {
             try {
                 newJdaInstance.awaitReady();
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) {
+            }
         }
         LOGGER.info("Connected to gateway.");
         return newJdaInstance;
@@ -67,12 +58,10 @@ public class Bot {
     public synchronized void load() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
         LOGGER.debug("Loading...");
-        final ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(this::loadEmojis);
-        executor.submit(this::registerDiscordConsumers);
-        executor.submit(this::registerListeners);
-        executor.submit(() -> LOGGER.debug("Loading done."));
-        executor.shutdown();
+        loadEmojis();
+        registerDiscordConsumers(LOGGER);
+        registerListeners();
+        LOGGER.debug("Loading done.");
     }
 
     public void shutdown() {
@@ -118,10 +107,16 @@ public class Bot {
     private HashMap<String, Icon> getLocalEmojis() {
         final HashMap<String, Icon> emojis = new HashMap<>();
         final Set<String> resourcePaths = new HashSet<>();
-        final String jarPath = getClass().getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-        if (jarPath == null) return emojis;
+        final String jarPath = getClass().getProtectionDomain().getCodeSource().getLocation().toURI().toString();
+        if (jarPath == null || (!jarPath.endsWith(".zip") || !jarPath.endsWith(".7z") || !jarPath.endsWith(".gz.tar"))) return emojis;
         LOGGER.debug("Loading Jar at path: {}", jarPath);
-        final JarFile jar = new JarFile(jarPath);
+        JarFile jar;
+        try {
+            jar = new JarFile(jarPath);
+        } catch (Exception e) {
+            LOGGER.error("Failed to load local emojis! {}", e);
+            return emojis;
+        }
         LOGGER.debug("JarFile loaded: {}", jar.getName());
         final Iterator<JarEntry> iterator = jar.entries().asIterator();
         while (iterator.hasNext()) {
@@ -164,39 +159,14 @@ public class Bot {
     }
 
     @Nullable
-    public Emoji getEmoji(final String name) {
-        final CachedEmoji emoji = getCachedEmoji(name);
-        return emoji == null ? null : emoji.emoji();
-    }
-
-    @NotNull
-    public String getEmojiFormatted(final String name) {
-        final CachedEmoji emoji = getCachedEmoji(name);
-        return emoji == null ? "`<emoji:null>`" : emoji.formatted();
-    }
-
-    @Nullable
     public CachedEmoji getCachedEmoji(final String name) {
         return cachedEmojis.stream().filter(emoji -> emoji.name().equals(name)).findFirst().orElse(null);
     }
 
-    @SneakyThrows
-    private void registerDiscordConsumers() {
-        for (final Guild guild : jda.getGuilds()) {
-            final long logId = Channels.get(guild.getIdLong()).logChannel;
-            if (logId != 0L) {
-                Jarvis.getSLF4J().registerListener(new LogListener(logId), LOGGER);
-                jda.getTextChannelById(logId).sendMessage("%s **Enabled**\n-# Since: <t:%d:R>"
-                                .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)))
-                        .queue(null, f -> LOGGER.error("Failed to send 'Online' message to Log Channel!"));
-            }
-        }
-    }
-
     private void registerListeners() {
         LOGGER.debug("Registering Event Listeners.");
+        jda.addEventListener(new GuildListener());
         jda.addEventListener(new CommandHandler());
-        jda.addEventListener(new CountGameHandler());
         jda.addEventListener(new MessageListener());
         jda.addEventListener(new Levels());
     }

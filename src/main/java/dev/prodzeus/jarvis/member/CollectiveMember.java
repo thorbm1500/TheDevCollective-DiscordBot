@@ -1,59 +1,48 @@
 package dev.prodzeus.jarvis.member;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
-import dev.prodzeus.jarvis.configuration.enums.LevelRoles;
-import dev.prodzeus.jarvis.configuration.enums.Roles;
-import dev.prodzeus.jarvis.enums.Counts;
+import dev.prodzeus.jarvis.configuration.Roles;
 import dev.prodzeus.jarvis.games.count.CountLevel;
 import dev.prodzeus.jarvis.listeners.Levels;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.utils.MiscUtil;
+import net.dv8tion.jda.internal.utils.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Formattable;
-import java.util.FormattableFlags;
-import java.util.Formatter;
+import java.util.*;
 
 import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 
 @SuppressWarnings("unused")
 public class CollectiveMember implements Formattable {
 
+    private final EnumMap<MemberData,Long> data;
     public final long id;
-    public final String mention;
     public final long server;
+    public final String mention;
+    private long experienceCooldown = 0;
+    private final List<Role> roles = new ArrayList<>(8);
 
-    private int level;
-    private long experience;
-    private long latestExperienceUpdate = 0L;
+    private boolean isActive = false;
+    private CountLevel countLevel = CountLevel.LEVEL_0;
+    private long nextCountLevelRequirement = countLevel.requirement;
 
-    private int countLevel;
-    private String countLevelIcon;
-    private int nextLevelRequirement;
-    private int correctCounts;
-    private int incorrectCounts;
-
-    private boolean isActive;
+    public enum MemberData {
+        LEVEL, EXPERIENCE,
+        CORRECT_COUNTS, INCORRECT_COUNTS,
+        IMAGES_SENT, REACTIONS_GIVEN, REACTIONS_RECEIVED
+    }
 
     public CollectiveMember(final long id, final long server) {
-        Jarvis.DATABASE.addMember(id,server);
         this.id = id;
-        this.mention = "<@"+id+">";
         this.server = server;
-        this.level = Jarvis.DATABASE.getLevel(id,server);
-        this.experience = Jarvis.DATABASE.getExperience(id,server);
+        this.mention = "<@"+id+">";
+        data = Jarvis.DATABASE.loadMember(server,id);
 
-        final Counts counts = Jarvis.DATABASE.getUserCounts(id,server);
-        this.countLevel = counts.level();
-        this.countLevelIcon = counts.levelIcon();
-        this.nextLevelRequirement = CountLevel.getNextLevelRequirement(counts.level());
-        this.correctCounts = counts.correctCounts();
-        this.incorrectCounts = counts.incorrectCounts();
-
-        LOGGER.debug("New Collective Member instance created for {} in server {}",id,server);
+        LOGGER.debug("[Server:{}] [Member:{}] New Collective Member instance created.",server,id);
         validate();
         confirmActivity();
     }
@@ -71,171 +60,183 @@ public class CollectiveMember implements Formattable {
     }
 
     private void validate() {
-        final int expectedLevel = Levels.getLevelFromXp(experience);
+        final long expectedLevel = Levels.getLevelFromXp(getData(MemberData.EXPERIENCE));
+        final long level = getData(MemberData.LEVEL);
         if (level == expectedLevel) {
-            LOGGER.debug("Data validated for member {} in server {}. No errors found.",id,server);
+            LOGGER.debug("[Server:{}] [Member:{}] Data validated. No errors found.",id,server);
         } else {
-            LOGGER.info("Wrong level found for member {} in server {}. Expected Level: {}. Level Found: {}. Updating...", id, server, expectedLevel, level);
-            level = expectedLevel;
-            Jarvis.DATABASE.updateLevel(id, server, level);
+            LOGGER.info("[Server:{}] [Member:{}] Wrong level found. Expected Level: {}. Level Found: {}. Updating...", id, server, expectedLevel, level);
+            updateData(MemberData.LEVEL,expectedLevel);
             validateAndRepairLevelRoles();
         }
     }
 
     private void validateAndRepairLevelRoles() {
         try {
-            LOGGER.debug("Repairing level roles for member {}...",id);
+            LOGGER.debug("[Server:{}] [Member:{}] Repairing level roles...",server,id);
             final Member member = getMember();
             for (final Role role : member.getRoles()) {
-                if (LevelRoles.contains(role.getIdLong())) removeRole(role.getIdLong());
+                if (role.getName().toLowerCase().contains("level")) removeRole(role.getIdLong());
             }
+            final long level = getData(MemberData.LEVEL);
             if (level > 0) {
-                final LevelRoles role = level < 5 ? LevelRoles.LEVEL_1 : LevelRoles.getLevelRole(level - (level % 5));
-                addRole(role);
+                final Role role = Roles.getLevelRole(server, level);
+                if (role != null) addRole(role);
             }
             LOGGER.debug("Roles successfully repaired and validated for member {}");
         } catch (Exception e) {
-            LOGGER.error("Exception thrown while attempting to repair and validate level roles for member {}! {}",id,e);
+            LOGGER.error("[Server:{}] [Member:{}] Failed to repair and validate level roles. {}",server,id,e);
         }
     }
 
-    @Nullable
-    public Member getMember() {
+    public long getData(@NotNull final MemberData data) {
         confirmActivity();
-        try {
-            return Jarvis.BOT.jda.getGuildById(server).getMemberById(id);
-        } catch (Exception e) {
-            LOGGER.warn("Failed to get member instance for member {} in server {}! {}",id,server,e);
-            return null;
+        return this.data.getOrDefault(data,0L);
+    }
+
+    public Pair<Long,Long> getData(@NotNull final MemberData d1, @NotNull final MemberData d2) {
+        return Pair.of(getData(d1),getData(d2));
+    }
+
+    private void updateData(@NotNull final Map<MemberData,Long> entries) {
+        confirmActivity();
+        if (entries.containsKey(MemberData.EXPERIENCE)) experienceCooldown = System.currentTimeMillis();
+        synchronized (data) {
+            data.putAll(entries);
         }
     }
 
-    @Nullable
-    public User getUser() {
+    private void updateData(@NotNull final MemberData data, final long value) {
         confirmActivity();
-        return Jarvis.jda().getUserById(id);
-    }
-
-    public int getLevel() {
-        confirmActivity();
-        return level;
-    }
-
-    public void updateLevel(final int level) {
-        confirmActivity();
-        synchronized (this) {
-            if (this.level == level) return;
-            this.level = level;
+        if (data==MemberData.EXPERIENCE) experienceCooldown = System.currentTimeMillis();
+        synchronized (this.data) {
+            this.data.put(data,value);
         }
-        Jarvis.DATABASE.updateLevel(id,server,level);
     }
 
-    public long getExperience() {
+    private void updateData(@NotNull final MemberData d1, final long v1, @NotNull final MemberData d2, final long v2) {
+        updateData(Map.of(d1,v1,d2,v2));
+    }
+
+    private void updateData(@NotNull final MemberData d1, final long v1, @NotNull final MemberData d2, final long v2, @NotNull final MemberData d3, final long v3) {
+        updateData(Map.of(d1,v1,d2,v2,d3,v3));
+    }
+
+    public @Nullable Member getMember() {
         confirmActivity();
-        return experience;
+        return Jarvis.getMember(server,id);
     }
 
-    public void updateExperience(final long experience) {
+    public @Nullable User getUser() {
         confirmActivity();
-        synchronized (this) {
-            latestExperienceUpdate = System.currentTimeMillis();
-            if (this.experience == experience) return;
-            this.experience = experience;
-        }
-        Jarvis.DATABASE.updateExperience(id,server,experience);
+        return Jarvis.getUser(id);
     }
 
-    public void updateExperienceAndLevel(final int level, final long experience) {
-        updateExperience(experience);
-        updateLevel(level);
-    }
-
-    public boolean isOnCooldown() {
+    public @NotNull List<Role> getRoles() {
+        if (roles.isEmpty()) roles.addAll(getMember().getRoles());
         confirmActivity();
-        return (System.currentTimeMillis() - latestExperienceUpdate) < 30000;
-    }
-
-    public int getCountLevel() {
-        confirmActivity();
-        return countLevel;
+        return roles;
     }
 
     public String getCountLevelIcon() {
         confirmActivity();
-        return countLevelIcon;
+        return countLevel.emoji;
     }
 
-    public int getCorrectCounts() {
-        confirmActivity();
-        return correctCounts;
+    public void updateLevel(final long level) {
+        updateData(MemberData.LEVEL,level);
     }
 
-    public int getIncorrectCounts() {
-        confirmActivity();
-        return incorrectCounts;
+    public void updateExperience(final long experience) {
+        updateData(MemberData.EXPERIENCE,experience);
     }
 
-    public void incrementCorrectCounts() {
-        confirmActivity();
-        synchronized (this) {
-            correctCounts++;
-        }
-        Jarvis.DATABASE.incrementCorrectCount(id, server);
-        updateCountStats();
+    public void updateExperienceAndLevel(final int level, final long experience) {
+        updateData(MemberData.LEVEL,level,MemberData.EXPERIENCE,experience);
     }
 
-    public void incrementIncorrectCounts() {
-        confirmActivity();
-        synchronized (this) {
-            incorrectCounts++;
-        }
-        Jarvis.DATABASE.incrementIncorrectCount(id,server);
+    public boolean isOnCooldown() {
+        return (System.currentTimeMillis() - experienceCooldown) < 30000;
     }
 
+    public void increment(@NotNull final MemberData data) {
+        increment(data,1);
+    }
+
+    public void increment(@NotNull final MemberData data, final long amount) {
+        updateData(data,getData(data)+amount);
+        if (data==MemberData.CORRECT_COUNTS) updateCountStats();
+    }
+
+    private int countUpdates = 0;
     public void updateCountStats() {
-        if (this.correctCounts > nextLevelRequirement) {
-            confirmActivity();
-            synchronized (this) {
-                this.countLevel++;
-                this.countLevelIcon = Counts.levelIcon(this.countLevel);
-                this.nextLevelRequirement = CountLevel.getNextLevelRequirement(level);
-            }
+        if (countUpdates++ > 5 || getData(MemberData.CORRECT_COUNTS) > nextCountLevelRequirement) {
+            countLevel = CountLevel.getCountLevel(getData(MemberData.CORRECT_COUNTS));
+            nextCountLevelRequirement = countLevel.requirement;
         }
     }
 
-    public void removeRole(@NotNull final Roles role) {
-        removeRole(role.id);
-    }
-
-    public void removeRole(@NotNull final LevelRoles role) {
-        removeRole(role.id);
+    public void removeRole(@NotNull final Roles.DevRole role) {
+        removeRole(role.getRoleId(server));
     }
 
     public void removeRole(final long roleId) {
+        removeRole(Roles.getRole(roleId));
+    }
+
+    public void removeRole(@NotNull final Role role) {
+        confirmActivity();
         try {
-            Jarvis.BOT.jda.getGuildById(server)
-                    .removeRoleFromMember(getMember(), Jarvis.BOT.jda.getRoleById(roleId))
-                    .queue(null, f -> LOGGER.error("Failed to add role {} to member {}! {}", roleId, id, f));
+            Jarvis.jda().getGuildById(server)
+                    .removeRoleFromMember(getMember(), role)
+                    .queue(null,
+                            f -> LOGGER.error("Failed to add role {} to member {}! {}", role.getName(), id, f));
         } catch (Exception e) {
-            LOGGER.error("Failed to remove role {} from member {}! {}",roleId,id,e);
+            LOGGER.error("Failed to remove role {} from member {}! {}",role.getName(),id,e);
         }
     }
 
-    public void addRole(@NotNull final Roles role) {
-        addRole(role.id);
-    }
-
-    public void addRole(@NotNull final LevelRoles role) {
-        addRole(role.id);
+    public void addRole(@NotNull final Roles.DevRole role) {
+        addRole(role.getRoleId(server));
     }
 
     public void addRole(final long roleId) {
+        addRole(Roles.getRole(roleId));
+    }
+
+    public void addRole(@NotNull final Role role) {
+        confirmActivity();
         try {
-            Jarvis.BOT.jda.getGuildById(server)
-                    .addRoleToMember(getMember(), Jarvis.BOT.jda.getRoleById(roleId))
-                    .queue(null, f -> LOGGER.error("Failed to add role {} to member {}! {}", roleId, id, f));
+            Jarvis.jda().getGuildById(server)
+                    .addRoleToMember(getMember(), role)
+                    .queue(null,
+                            f -> LOGGER.error("Failed to add role {} to member {}! {}", role.getName(), id, f));
         } catch (Exception e) {
-            LOGGER.error("Failed to add role {} from member {}! {}",roleId,id,e);
+            LOGGER.error("Failed to add role {} to member {}! {}",role.getName(),id,e);
+        }
+    }
+
+    public static void updateRoles(final long serverId, final long memberId, @NotNull final Role add, @NotNull final Role remove) {
+        updateRoles(serverId,memberId,Set.of(add),Set.of(remove));
+    }
+
+    public static void updateRoles(final long serverId, final long memberId, @NotNull final Collection<Role> add, @NotNull final Collection<Role> remove) {
+        MemberManager.getCollectiveMember(serverId,memberId).updateRoles(add,remove);
+    }
+
+    public void updateRoles(@NotNull final Role add, @NotNull final Role remove) {
+        updateRoles(Set.of(add),Set.of(remove));
+    }
+
+    public void updateRoles(@NotNull final Collection<Role> add, @NotNull final Collection<Role> remove) {
+        confirmActivity();
+        try {
+            Jarvis.getGuild(server)
+                    .modifyMemberRoles(getMember(),add,remove)
+                    .queue(null,
+                            f -> LOGGER.error("[Server:{}] [Member:{}] Failed to modify roles, Add: {} & Remove: {}! {}", server, id, add, remove, f));
+        } catch (Exception e) {
+            LOGGER.error("[Server:{}] [Member:{}] Failed to modify roles, Add: {} & Remove: {}! {}", server, id, add, remove, e);
         }
     }
 
