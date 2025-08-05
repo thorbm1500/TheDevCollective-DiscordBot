@@ -3,10 +3,7 @@ package dev.prodzeus.jarvis.bot;
 import dev.prodzeus.jarvis.commands.CommandHandler;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.games.count.CountGameHandler;
-import dev.prodzeus.jarvis.listeners.GuildListener;
-import dev.prodzeus.jarvis.listeners.Levels;
-import dev.prodzeus.jarvis.listeners.MessageListener;
-import dev.prodzeus.jarvis.listeners.ReactionsListener;
+import dev.prodzeus.jarvis.listeners.*;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -171,7 +168,9 @@ public class Bot {
         LOGGER.debug("Registering Event Listeners.");
         jda.addEventListener(new GuildListener());
         jda.addEventListener(new CommandHandler());
+
         jda.addEventListener(new MessageListener());
+        jda.addEventListener(new ImageListener());
         jda.addEventListener(new ReactionsListener());
         jda.addEventListener(new Levels());
         new CountGameHandler();

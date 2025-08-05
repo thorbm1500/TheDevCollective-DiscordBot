@@ -20,7 +20,8 @@ public final class Channels {
     public enum DevChannel {
         LOG,
         COUNT,
-        LEVEL
+        LEVEL,
+        MEMES
         ;
 
         public static @Nullable DevChannel of(@NotNull final String value) {
