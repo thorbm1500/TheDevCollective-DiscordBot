@@ -5,6 +5,8 @@ import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.configuration.Roles;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
+import dev.prodzeus.logger.Logger;
+import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -17,7 +19,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
-public class Levels extends ListenerAdapter {
+public final class Levels extends ListenerAdapter {
+
+    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Levels");
 
     private static final Pattern regex = Pattern.compile(":[^\\s:][^:]*?:");
     private static final List<Long> levels;
@@ -27,7 +31,7 @@ public class Levels extends ListenerAdapter {
     }
 
     @NotNull
-    private static synchronized List<Long> generateLevels() {
+    private static List<Long> generateLevels() {
         final List<Long> levels = new ArrayList<>(101);
         long xp = 0;
         for (int i = 0; i < 101; i++) {
@@ -38,7 +42,7 @@ public class Levels extends ListenerAdapter {
     }
 
     public Levels() {
-        Jarvis.LOGGER.debug("New Levels Listener created.");
+        LOGGER.debug("New Levels Listener created.");
     }
 
     public static int getLevelFromXp(final long xp) {
@@ -52,18 +56,18 @@ public class Levels extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent e) {
-        if (e.isWebhookMessage() || !(e.getAuthor().isBot() || e.getAuthor().isSystem())) return;
+        if (e.isWebhookMessage() || e.getAuthor().isBot() || e.getAuthor().isSystem()) return;
 
         final long guildId = e.getGuild().getIdLong();
         final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(e.getAuthor().getIdLong(), guildId);
-        if (collectiveMember.isOnCooldown()) return;
+        if (collectiveMember.hasExperienceCooldown()) return;
 
         final String content = e.getMessage().getContentRaw().toLowerCase();
 
         long xp = 1;
         xp += Math.clamp((content.length() / 50), 1, 4);
 
-        if (!e.getMessage().getAttachments().isEmpty()) xp += 1;
+        if (!e.getMessage().getAttachments().isEmpty()) xp += 2;
 
         long emojis = regex.matcher(content).results().count();
         xp += Math.min(emojis * 2, 8);
@@ -78,12 +82,9 @@ public class Levels extends ListenerAdapter {
             final Collection<Role> remove = HashSet.newHashSet(1);
             if (newLevel == 1) {
                 add.add(Roles.getLevelRole(guildId,1));
-            } else if (newLevel == 5) {
-                add.add(Roles.getLevelRole(guildId,5));
-                remove.add(Roles.getLevelRole(guildId,1));
             } else if ((newLevel % 5) == 0) {
+                remove.add(Roles.getLevelRole(guildId,newLevel == 5 ? 1 : newLevel - 5));
                 add.add(Roles.getLevelRole(guildId,newLevel));
-                remove.add(Roles.getLevelRole(guildId,newLevel));
             }
             Channels.get(collectiveMember.server)
                     .getChannel(Channels.DevChannel.LEVEL)

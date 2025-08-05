@@ -31,7 +31,18 @@ public class CountPlayer implements Comparable<CountPlayer> {
 
     @Override
     public int compareTo(@NotNull CountPlayer o) {
+        if (o.counts == 0) return -1;
+        else if (o.counts == 1) return 1;
         return Integer.compare(counts, o.counts);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof CountPlayer oP && id==oP.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Long.hashCode(id) + Long.hashCode(server);
+    }
 }

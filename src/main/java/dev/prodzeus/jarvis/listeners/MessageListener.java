@@ -26,5 +26,4 @@ public class MessageListener extends ListenerAdapter {
             Jarvis.LOGGER.error("Failed to add reaction to message! {}",ex);
         }
     }
-
 }

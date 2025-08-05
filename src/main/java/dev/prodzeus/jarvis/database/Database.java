@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.sql.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Database {
 
@@ -36,7 +37,7 @@ public class Database {
             return;
         }
 
-        LOGGER.info("[DB:{}:{}/{}] Database Connected.", DB_HOST, DB_PORT, DB_NAME);
+        LOGGER.info("[{}:{}/{}] Database Connected.", DB_HOST, DB_PORT, DB_NAME);
         createTables();
         validateServers();
     }
@@ -146,38 +147,7 @@ public class Database {
     @SneakyThrows
     public void validateServers() {
         if (!reconnect("validateServers")) return;
-        final HashSet<Long> allGuilds = new HashSet<>();
-        for (Guild guild : Jarvis.getGuilds()) allGuilds.add(guild.getIdLong());
-        LOGGER.trace("[Servers] Validating {} entr{}...", allGuilds.size(), (allGuilds.size() > 1 ? "ies" : "y"));
-        try {
-            try (Statement statement = connection.createStatement()) {
-                final StringBuilder builder = new StringBuilder();
-                for (final Long guild : allGuilds) {
-                    builder.append("SELECT `server_id` FROM `servers` WHERE `server_id`=").append(guild).append(";\n");
-                    LOGGER.trace("[Server:{}] Added to query batch.", guild);
-                }
-                boolean hasNext = statement.execute(builder.toString());
-                LOGGER.trace("[Servers] Query executed.");
-
-                while (hasNext) {
-                    try (ResultSet result = statement.getResultSet()) {
-                        if (result.next()) allGuilds.remove(result.getLong(1));
-                    }
-                    hasNext = statement.getMoreResults();
-                }
-                if (!allGuilds.isEmpty()) {
-                    LOGGER.trace("[Servers] Repairing {} entr{}...", allGuilds.size(), (allGuilds.size() > 1 ? "ies" : "y"));
-                    if (!addServers(allGuilds)) {
-                        LOGGER.warn("Failed to repair {} entr{}!", allGuilds.size(), (allGuilds.size() > 1 ? "ies" : "y"));
-                        return;
-                    }
-                }
-                LOGGER.debug("[Servers] All servers successfully validated.");
-            }
-
-        } catch (SQLException e) {
-            LOGGER.error("[Servers] Failed to validate servers. {}", e);
-        }
+        Jarvis.getGuilds().forEach(guild -> addServer(guild.getIdLong()));
     }
 
     @SuppressWarnings("all")
@@ -188,7 +158,7 @@ public class Database {
     @SneakyThrows
     public boolean addServers(@NotNull final Collection<Long> ids) {
         if (!reconnect("addServers")) return false;
-        LOGGER.trace("Adding {} new entr{}...", ids.size(), (ids.size() > 1 ? "ies" : "y"));
+        LOGGER.debug("Adding {} new entr{}...", ids.size(), (ids.size() > 1 ? "ies" : "y"));
         try {
             connection.setAutoCommit(false);
             try (var statement = connection.prepareStatement("INSERT IGNORE INTO `servers` VALUES (?)")) {
@@ -255,7 +225,7 @@ public class Database {
         try (var statement = connection.prepareStatement("DELETE FROM `servers` WHERE `server_id`=?")) {
             statement.setLong(1, serverId);
             final int rowsUpdated = statement.executeUpdate();
-            LOGGER.info("[Server:{}] Entry removed. {} row{} affected.", serverId, rowsUpdated, (rowsUpdated > 1 ? "s": ""));
+            LOGGER.info("[Server:{}] Entry removed. {} row{} affected.", serverId, rowsUpdated, (rowsUpdated > 1 ? "s" : ""));
         } catch (SQLException e) {
             LOGGER.error("[Server:{}] Failed to remove entry. {}", serverId, e);
         }
@@ -281,13 +251,17 @@ public class Database {
         return true;
     }
 
+    public void addMember(@NotNull final CollectiveMember member) {
+        addMember(member.server, member.id);
+    }
+
     public void addMember(@NotNull final Member member) {
         addMember(member.getGuild().getIdLong(), member.getIdLong());
     }
 
     public void addMember(final long serverId, final long memberId) {
         if (memberExists(memberId, serverId)) return;
-        LOGGER.debug("[Server:{}] [Member:{}] Adding new entry...", serverId, memberId);
+        LOGGER.trace("[Server:{}] [Member:{}] Adding new entry...", serverId, memberId);
         if (!reconnect("addMember")) return;
         try (var statement = connection.prepareStatement("INSERT IGNORE INTO `members` (`member_id`,`server_id`) VALUES (?,?)")) {
             statement.setLong(1, memberId);
@@ -310,11 +284,11 @@ public class Database {
             statement.setLong(2, serverId);
             final ResultSet resultSet = statement.executeQuery();
             if (!resultSet.next()) {
-                LOGGER.info("[Server:{}] [Member:{}] No entry found.", serverId, memberId);
+                LOGGER.trace("[Server:{}] [Member:{}] No entry found.", serverId, memberId);
                 if (!serverExists(serverId)) addServer(serverId);
                 return false;
             } else {
-                LOGGER.info("[Server:{}] [Member:{}] Entry found.", serverId, memberId);
+                LOGGER.trace("[Server:{}] [Member:{}] Entry found.", serverId, memberId);
                 return true;
             }
         } catch (SQLException e) {
@@ -325,7 +299,7 @@ public class Database {
 
     @Contract(pure = true)
     public EnumMap<CollectiveMember.MemberData, Long> loadMember(final long serverId, final long memberId) {
-        addMember(serverId,memberId);
+        addMember(serverId, memberId);
         final EnumMap<CollectiveMember.MemberData, Long> data = new EnumMap<>(CollectiveMember.MemberData.class);
         if (!reconnect("loadMember")) return data;
         LOGGER.trace("[Server:{}] [Member:{}] Loading data...", serverId, memberId);
@@ -345,6 +319,28 @@ public class Database {
             LOGGER.error("[Server:{}] [Member:{}] Failed to load data. {}", serverId, memberId, e);
         }
         return data;
+    }
+
+    public void saveMember(@NotNull final CollectiveMember member) {
+        addMember(member);
+        if (!reconnect("saveMember")) return;
+        LOGGER.trace("[Server:{}] [Member:{}] Saving data...", member.server, member.id);
+        try (var statement = connection.prepareStatement("UPDATE members SET `level`=?,`experience`=?,`correct_counts`=?,`incorrect_counts`=?,`images_sent`=?,`reactions_given`=?,`reactions_received`=? WHERE `member_id`=? AND `server_id`=?")) {
+            final EnumMap<CollectiveMember.MemberData, Long> data = member.getCurrentData();
+            statement.setLong(1, data.get(CollectiveMember.MemberData.LEVEL));
+            statement.setLong(2, data.get(CollectiveMember.MemberData.EXPERIENCE));
+            statement.setLong(3, data.get(CollectiveMember.MemberData.CORRECT_COUNTS));
+            statement.setLong(4, data.get(CollectiveMember.MemberData.INCORRECT_COUNTS));
+            statement.setLong(5, data.get(CollectiveMember.MemberData.IMAGES_SENT));
+            statement.setLong(6, data.get(CollectiveMember.MemberData.REACTIONS_GIVEN));
+            statement.setLong(7, data.get(CollectiveMember.MemberData.REACTIONS_RECEIVED));
+            statement.setLong(8, member.id);
+            statement.setLong(9, member.server);
+            statement.executeUpdate();
+            LOGGER.debug("[Server:{}] [Member:{}] Data saved.", member.server, member.id);
+        } catch (Exception e) {
+            LOGGER.error("[Server:{}] [Member:{}] Failed to save data. {}", member.server, member.id, e);
+        }
     }
 
     @Contract(pure = true)
@@ -371,7 +367,7 @@ public class Database {
             LOGGER.debug("[Server:{}] Skipping update. No IDs found.", serverId);
             return false;
         } else if (!reconnect("saveChannelIds")) return false;
-        LOGGER.trace("[Server:{}] [Channels] Updating {} ID{}...", serverId, channels.size(), (channels.size() > 1 ? "s" : ""));
+        LOGGER.debug("[Server:{}] [Channels] Updating {} ID{}...", serverId, channels.size(), (channels.size() > 1 ? "s" : ""));
         try {
             connection.setAutoCommit(false);
             try (var statement = connection.prepareStatement("UPDATE `channels` SET `channel_id`=? WHERE `server_id`=? AND `channel_name`=?")) {
@@ -381,11 +377,11 @@ public class Database {
                     statement.setLong(1, index.getValue());
                     statement.setString(3, index.getKey().toString());
                     statement.addBatch();
-                    LOGGER.trace("[Server:{}] [Channel:{}:{}] Added to batch.", serverId, index.getKey().toString(), index.getValue());
+                    LOGGER.debug("[Server:{}] [Channel:{}:{}] Added to batch.", serverId, index.getKey().toString(), index.getValue());
                 }
 
                 statement.executeBatch();
-                LOGGER.trace("[Server:{}] [Channels] Batch executed.", serverId);
+                LOGGER.debug("[Server:{}] [Channels] Batch executed.", serverId);
             }
             connection.commit();
             LOGGER.debug("[Server:{}] [Channels] {} ID{} updated.", serverId, channels.size(), (channels.size() > 1 ? "s" : ""));
@@ -437,7 +433,7 @@ public class Database {
     @SneakyThrows
     public boolean saveRoleIds(final long serverId, @NotNull final EnumMap<Roles.DevRole, Long> roles) {
         if (roles.isEmpty()) {
-            LOGGER.debug("[Server:{}] [Roles] Skipping update. No IDs found.");
+            LOGGER.trace("[Server:{}] [Roles] Skipping update. No IDs found.");
             return false;
         } else if (!reconnect("saveRoleIds")) return false;
         LOGGER.trace("[Server:{}] [Roles] Updating {} ID{}...", serverId, roles.size(), (roles.size() > 1 ? "s" : ""));
@@ -487,8 +483,8 @@ public class Database {
     public CountGameData getCountGameData(final long serverId) {
         final long channelId = Channels.getChannelId(serverId, Channels.DevChannel.COUNT);
         if (channelId == 0) {
-            LOGGER.info("[Server:{}] [Game:Count] No channel ID has been set yet.", serverId);
-        } else if (reconnect("getCountGameData"))  {
+            LOGGER.warn("[Server:{}] [Game:Count] No channel ID has been set yet.", serverId);
+        } else if (reconnect("getCountGameData")) {
             LOGGER.trace("[Server:{}] [Game:Count] Loading data...", serverId);
             try (var statement = connection.prepareStatement("SELECT * FROM `game_data_count` WHERE `server_id`=?")) {
                 statement.setLong(1, serverId);
@@ -515,7 +511,7 @@ public class Database {
         if (!reconnect("saveCountGameData")) return;
         LOGGER.trace("[Server:{}] [Game:Count] Saving data...", data.serverId);
         try (var statement = connection.prepareStatement("UPDATE `game_data_count` SET `sync_message`=?,`latest_player`=?,`current_number`=?,`highscore_announced`=?,`highscore`=?,`highscore_epoch`=? WHERE `server_id`=?")) {
-            statement.setLong(1, data.syncMessage);
+            statement.setLong(1, data.getSyncMessageId());
             statement.setLong(2, data.latestPlayer);
             statement.setInt(3, data.currentNumber);
             statement.setBoolean(4, data.highscoreAnnounced);
@@ -534,7 +530,7 @@ public class Database {
         final HashMap<Long, CountPlayer> players = HashMap.newHashMap(6);
         if (reconnect("getCurrentCountPlayers")) {
             LOGGER.trace("[Server:{}] [Game:Count] Loading players...", serverId);
-            try (var statement = connection.prepareStatement("SELECT `member_id`,`counts` FROM `game_data` WHERE `server_id`=?")) {
+            try (var statement = connection.prepareStatement("SELECT `member_id`,`counts` FROM `game_data` WHERE `server_id`=? AND NOT `counts` = 0 ORDER BY `counts` DESC")) {
                 statement.setLong(1, serverId);
                 final ResultSet result = statement.executeQuery();
                 if (result.getFetchSize() > 0) LOGGER.debug("[Server:{}] [Game:Count] Players loaded.", serverId);
@@ -557,10 +553,10 @@ public class Database {
             LOGGER.trace("[Server:{}] [Game:Count] Saving players...", data.serverId);
             if (data.getPlayers().isEmpty()) {
                 try {
-                    connection.createStatement().executeUpdate("UPDATE `game_data` SET `counts`=0 WHERE `server_id`="+data.serverId);
+                    connection.createStatement().executeUpdate("UPDATE `game_data` SET `counts`=0 WHERE `server_id`=" + data.serverId);
                     LOGGER.debug("[Server:{}] [Game:Count] Players reset.", data.serverId);
                 } catch (SQLException e) {
-                    LOGGER.error("[Server:{}] [Game:Count] Failed to reset players. {}",data.serverId,e);
+                    LOGGER.error("[Server:{}] [Game:Count] Failed to reset players. {}", data.serverId, e);
                 }
             } else {
                 connection.setAutoCommit(false);

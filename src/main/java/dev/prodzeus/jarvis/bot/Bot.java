@@ -2,18 +2,24 @@ package dev.prodzeus.jarvis.bot;
 
 import dev.prodzeus.jarvis.commands.CommandHandler;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
+import dev.prodzeus.jarvis.games.count.CountGameHandler;
 import dev.prodzeus.jarvis.listeners.GuildListener;
 import dev.prodzeus.jarvis.listeners.Levels;
 import dev.prodzeus.jarvis.listeners.MessageListener;
-import dev.prodzeus.jarvis.listeners.Ready;
+import dev.prodzeus.jarvis.listeners.ReactionsListener;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Icon;
 import net.dv8tion.jda.api.entities.emoji.ApplicationEmoji;
+import net.dv8tion.jda.api.events.session.ReadyEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import net.dv8tion.jda.internal.utils.JDALogger;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.InputStream;
@@ -56,7 +62,6 @@ public class Bot {
     }
 
     public synchronized void load() {
-        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
         LOGGER.debug("Loading...");
         loadEmojis();
         registerDiscordConsumers(LOGGER);
@@ -66,7 +71,6 @@ public class Bot {
 
     public void shutdown() {
         if (jda != null && jda.getStatus() != JDA.Status.SHUTTING_DOWN) jda.shutdown();
-        Jarvis.shutdown();
     }
 
     @SneakyThrows
@@ -83,9 +87,11 @@ public class Bot {
         boolean newUploads = false;
 
         for (final Map.Entry<String, Icon> localEmoji : localEmojis.entrySet()) {
-            if (cachedEmojis.stream().anyMatch(cached -> cached.equals(localEmoji.getKey()))) {
-                LOGGER.debug("Emoji {} already exists. Skipping...", localEmoji.getKey());
-            } else if (localEmoji.getKey().length() <= 32) {
+            if (localEmoji.getKey().length() > 32) {
+                LOGGER.error("Emoji names must be shorter than 32! Emoji {} has a length of {}!", localEmoji.getKey(), localEmoji.getKey().length());
+                continue;
+            }
+            if (cachedEmojis.stream().noneMatch(cached -> cached.name().equals(localEmoji.getKey()))) {
                 try {
                     cachedEmojis.add(CachedEmoji.cache(
                             jda.createApplicationEmoji(localEmoji.getKey(), localEmoji.getValue())
@@ -95,8 +101,6 @@ public class Bot {
                 } catch (Exception e) {
                     LOGGER.error("Failed to update Emoji {}! {}", localEmoji.getKey(), e);
                 }
-            } else {
-                LOGGER.error("Emoji names must be shorter than 32! Emoji {} has a length of {}!", localEmoji.getKey(), localEmoji.getKey().length());
             }
         }
         if (!newUploads) LOGGER.info("All emojis loaded and up-to-date.");
@@ -168,6 +172,18 @@ public class Bot {
         jda.addEventListener(new GuildListener());
         jda.addEventListener(new CommandHandler());
         jda.addEventListener(new MessageListener());
+        jda.addEventListener(new ReactionsListener());
         jda.addEventListener(new Levels());
+        new CountGameHandler();
+    }
+
+    public static class Ready extends ListenerAdapter {
+        @Override
+        public void onReady(@NotNull ReadyEvent e) {
+            e.getJDA()
+                    .getPresence()
+                    .setPresence(OnlineStatus.ONLINE, Activity.watching("\uD835\uDD80\uD835\uDD7E\uD835\uDD70\uD835\uDD7D count"));
+            e.getJDA().removeEventListener(this);
+        }
     }
 }

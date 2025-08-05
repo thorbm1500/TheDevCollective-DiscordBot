@@ -9,6 +9,7 @@ import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.utils.MiscUtil;
 import net.dv8tion.jda.internal.utils.tuple.Pair;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -18,6 +19,8 @@ import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 
 @SuppressWarnings("unused")
 public class CollectiveMember implements Formattable {
+
+    private int unsavedChanges = 0;
 
     private final EnumMap<MemberData,Long> data;
     public final long id;
@@ -29,6 +32,8 @@ public class CollectiveMember implements Formattable {
     private boolean isActive = false;
     private CountLevel countLevel = CountLevel.LEVEL_0;
     private long nextCountLevelRequirement = countLevel.requirement;
+    private Set<Long> reactionsGiven = new HashSet<>();
+    private Set<Long> reactionsReceived = new HashSet<>();
 
     public enum MemberData {
         LEVEL, EXPERIENCE,
@@ -45,6 +50,11 @@ public class CollectiveMember implements Formattable {
         LOGGER.debug("[Server:{}] [Member:{}] New Collective Member instance created.",server,id);
         validate();
         confirmActivity();
+    }
+
+    public void save() {
+        Jarvis.DATABASE.saveMember(this);
+        unsavedChanges = 0;
     }
 
     private synchronized void confirmActivity() {
@@ -89,6 +99,11 @@ public class CollectiveMember implements Formattable {
         }
     }
 
+    @Contract(pure = true)
+    public @NotNull EnumMap<MemberData,Long> getCurrentData() {
+        return new EnumMap<>(data);
+    }
+
     public long getData(@NotNull final MemberData data) {
         confirmActivity();
         return this.data.getOrDefault(data,0L);
@@ -104,14 +119,11 @@ public class CollectiveMember implements Formattable {
         synchronized (data) {
             data.putAll(entries);
         }
+        if (unsavedChanges++ > 15) save();
     }
 
     private void updateData(@NotNull final MemberData data, final long value) {
-        confirmActivity();
-        if (data==MemberData.EXPERIENCE) experienceCooldown = System.currentTimeMillis();
-        synchronized (this.data) {
-            this.data.put(data,value);
-        }
+        updateData(Map.of(data,value));
     }
 
     private void updateData(@NotNull final MemberData d1, final long v1, @NotNull final MemberData d2, final long v2) {
@@ -140,22 +152,14 @@ public class CollectiveMember implements Formattable {
 
     public String getCountLevelIcon() {
         confirmActivity();
-        return countLevel.emoji;
-    }
-
-    public void updateLevel(final long level) {
-        updateData(MemberData.LEVEL,level);
-    }
-
-    public void updateExperience(final long experience) {
-        updateData(MemberData.EXPERIENCE,experience);
+        return countLevel.getEmoji();
     }
 
     public void updateExperienceAndLevel(final int level, final long experience) {
         updateData(MemberData.LEVEL,level,MemberData.EXPERIENCE,experience);
     }
 
-    public boolean isOnCooldown() {
+    public boolean hasExperienceCooldown() {
         return (System.currentTimeMillis() - experienceCooldown) < 30000;
     }
 
@@ -238,6 +242,26 @@ public class CollectiveMember implements Formattable {
         } catch (Exception e) {
             LOGGER.error("[Server:{}] [Member:{}] Failed to modify roles, Add: {} & Remove: {}! {}", server, id, add, remove, e);
         }
+    }
+
+    public void handleGiveReaction(final long messageId) {
+        if (hasReacted(messageId)) return;
+        reactionsGiven.add(messageId);
+        increment(MemberData.EXPERIENCE, 2);
+    }
+
+    public void handleReceivedReaction(final long messageId) {
+        if (hasReceived(messageId)) return;
+        reactionsReceived.add(messageId);
+        increment(MemberData.EXPERIENCE, 2);
+    }
+
+    public boolean hasReacted(final long messageId) {
+        return reactionsGiven.contains(messageId);
+    }
+
+    public boolean hasReceived(final long messageId) {
+        return reactionsReceived.contains(messageId);
     }
 
     @Override

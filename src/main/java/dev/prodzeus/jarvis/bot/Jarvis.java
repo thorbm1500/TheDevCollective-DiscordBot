@@ -3,7 +3,6 @@ package dev.prodzeus.jarvis.bot;
 import dev.prodzeus.jarvis.configuration.Channels;
 import dev.prodzeus.jarvis.database.Database;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
-import dev.prodzeus.jarvis.games.count.CountGameHandler;
 import dev.prodzeus.jarvis.listeners.LogListener;
 import dev.prodzeus.jarvis.member.MemberManager;
 import dev.prodzeus.logger.Level;
@@ -22,6 +21,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class Jarvis {
 
@@ -29,11 +30,13 @@ public class Jarvis {
     public static final Database DATABASE;
     public static final Bot BOT;
     private static final Set<Runnable> shutdownHooks = new HashSet<>();
+    private static final Set<Guild> guilds = new HashSet<>();
 
     static {
+        Runtime.getRuntime().addShutdownHook(new Thread(Jarvis::shutdown));
         LOGGER = getSLF4J().getLoggerFactory().getLogger("Jarvis");
-        LOGGER.setLevel(Level.valueOf(System.getenv("LOG_LEVEL").toUpperCase()));
-        LOGGER.info("Jarvis loading...");
+        LOGGER.setLevel(Level.valueOf(System.getenv("LOG_LEVEL").toUpperCase()))
+                .info("Jarvis loading...");
         BOT = new Bot();
         DATABASE = new Database();
         BOT.load();
@@ -41,17 +44,25 @@ public class Jarvis {
 
     public static void main(String[] args) {
         new MemberManager();
-        new CountGameHandler();
+        Executors.newScheduledThreadPool(1).schedule(() -> BOT.jda.getGuildCache().forEach(guild -> System.out.println(guild.getIdLong())),30, TimeUnit.SECONDS);
     }
 
     public static void registerShutdownHook(@NotNull final Runnable runnable) {
+        LOGGER.trace("Registering shutdown hook {}", runnable.toString());
         shutdownHooks.add(runnable);
     }
 
+    @SneakyThrows
     public static synchronized void shutdown() {
+        SLF4JProvider.get().getEventManager().unregisterAll(LOGGER);
         LOGGER.info("JDA disconnected. Jarvis shutting down...");
-        shutdownHooks.forEach(Runnable::run);
+        try {
+            shutdownHooks.forEach(Runnable::run);
+        } catch (Exception e) {
+            LOGGER.error("Failed to execute shutdown hooks! {}",e );
+        }
         Jarvis.LOGGER.info("Goodbye!");
+        BOT.shutdown();
     }
 
     public static SLF4JProvider getSLF4J() {
@@ -88,7 +99,11 @@ public class Jarvis {
     }
 
     public static Collection<Guild> getGuilds() {
-        return jda().getGuilds();
+        if (guilds.isEmpty()) {
+            guilds.addAll(jda().getGuilds());
+            guilds.addAll(jda().getGuildCache().asSet());
+        }
+        return guilds;
     }
 
     public static Guild getGuild(final long id) {

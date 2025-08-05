@@ -1,6 +1,8 @@
 package dev.prodzeus.jarvis.member;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
+import dev.prodzeus.logger.Logger;
+import dev.prodzeus.logger.SLF4JProvider;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -11,6 +13,7 @@ import java.util.stream.Collectors;
 
 public class MemberManager {
 
+    private static final Logger LOGGER = SLF4JProvider.get().getLogger("MemberManager");
     private static final ScheduledExecutorService scheduler;
     private static final Set<CollectiveMember> members = new HashSet<>();
 
@@ -27,7 +30,6 @@ public class MemberManager {
     }
 
     public MemberManager() {
-        Jarvis.LOGGER.debug("New Member Manager instance created.");
         Jarvis.registerShutdownHook(this::shutdown);
     }
 
@@ -40,12 +42,14 @@ public class MemberManager {
             members.add(member);
             return member;
         } catch (Exception e) {
-            Jarvis.LOGGER.error("Failed to get Collective Member! {}", e);
+            LOGGER.error("Failed to get Collective Member! {}", e);
             return null;
         }
     }
 
     public void shutdown() {
+        LOGGER.info("Executing shutdown procedure...");
+        members.forEach(CollectiveMember::save);
         members.clear();
         scheduler.shutdown();
     }

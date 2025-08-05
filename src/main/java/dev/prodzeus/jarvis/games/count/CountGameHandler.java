@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 public class CountGameHandler {
@@ -58,7 +59,7 @@ public class CountGameHandler {
     private static @NotNull String getGameOverText() {
         return "# Game Over "
                + Jarvis.getEmojiFormatted("lightning")
-               + " \n%s: **%s** %s\n-# Ended by: %s *-25xp Penalty* \n## Leaderboard "
+               + " \n%s: **%s** %s\n-# Ended by: %s *-25xp penalty* \n## Leaderboard "
                + Jarvis.getEmojiFormatted("rocket")
                + " \n1. **%s** *%+dxp* \n -# **%s Counts | %s**\n2. **%s** *%+dxp* \n -# **%s Counts | %s**\n3. **%s** *%+dxp* \n -# **%s Counts | %s**\n-# ***and %d other players..***";
     }
@@ -72,8 +73,17 @@ public class CountGameHandler {
     }
 
     public void shutdown() {
-        games.values().forEach(CountGame::save);
-        games.clear();
-        Jarvis.jda().removeEventListener(this);
+        LOGGER.info("Executing shutdown procedure...");
+        if (games.isEmpty()) return;
+        try {
+            final Iterator<CountGame> iterator = games.values().iterator();
+            while (iterator.hasNext()) {
+                final CountGame game = iterator.next();
+                if (game != null) game.shutdown();
+                iterator.remove();
+            }
+        } catch (Exception e) {
+            LOGGER.error("Exception thrown during shutdown procedure! {}", e);
+        }
     }
 }

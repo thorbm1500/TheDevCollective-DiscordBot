@@ -7,10 +7,12 @@ public abstract class GameData  {
 
     public final long serverId;
     public final TextChannel channel;
+    public final long channelId;
 
     protected GameData(final long serverId, final long channelId) {
         this.serverId = serverId;
         this.channel = Channels.getChannel(channelId);
+        this.channelId = channelId;
     }
 
     public void saveAndReset() {

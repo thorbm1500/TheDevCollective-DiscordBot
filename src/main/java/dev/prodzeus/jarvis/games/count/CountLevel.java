@@ -1,5 +1,6 @@
 package dev.prodzeus.jarvis.games.count;
 
+import dev.prodzeus.jarvis.bot.Jarvis;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
@@ -20,7 +21,7 @@ public enum CountLevel {
 
     public final long level;
     public final long requirement;
-    public final String emoji;
+    private final String emoji;
 
     CountLevel(final long level, final long requirement, @NotNull final String emoji) {
         this.level = level;
@@ -51,5 +52,9 @@ public enum CountLevel {
 
     public static long getNextLevelRequirement(final long level) {
         return of(level+1).requirement;
+    }
+
+    public String getEmoji() {
+        return Jarvis.getEmojiFormatted(emoji);
     }
 }
