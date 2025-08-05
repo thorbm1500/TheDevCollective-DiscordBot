@@ -43,7 +43,7 @@ public class CountGame extends ListenerAdapter {
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent event) {
         try {
-            if (!isValidMessageEvent(event)) return;
+            if (event.getChannel().getIdLong() != data.channelId || !isValidMessageEvent(event)) return;
 
             final Integer countedNumber = getCountedNumber(event.getMessage(), event.getAuthor().getIdLong());
             if (countedNumber == null) return;

@@ -19,6 +19,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import static dev.prodzeus.jarvis.utility.Util.isValidMessageEvent;
+
 public final class Levels extends ListenerAdapter {
 
     private static final Logger LOGGER = SLF4JProvider.get().getLogger("Levels");
@@ -56,7 +58,7 @@ public final class Levels extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent e) {
-        if (e.isWebhookMessage() || e.getAuthor().isBot() || e.getAuthor().isSystem()) return;
+        if (!isValidMessageEvent(e)) return;
 
         final long guildId = e.getGuild().getIdLong();
         final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(e.getAuthor().getIdLong(), guildId);
