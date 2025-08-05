@@ -155,11 +155,12 @@ public class CountGame extends ListenerAdapter {
     private boolean computeStreak(@NotNull final MessageReceivedEvent event) {
         logger.trace("Computing streak for player: {}", event.getAuthor().getIdLong());
         final List<Long> times = playerStreaks.computeIfAbsent(event.getAuthor().getIdLong(), k -> new ArrayList<>());
-        final long compareTime = event.getMessage().getTimeCreated().toEpochSecond();
-        times.add(compareTime);
+        final long createdAt = event.getMessage().getTimeCreated().toEpochSecond();
+        times.add(createdAt);
+        final long compareTime = createdAt + 20000;
         if (times.size() < 6) return false;
         times.removeFirst();
-        return times.stream().allMatch(time -> (time + 60000) > compareTime);
+        return times.stream().allMatch(time -> time > compareTime);
     }
 
     private void deleteMessage(@NotNull final Message message) {

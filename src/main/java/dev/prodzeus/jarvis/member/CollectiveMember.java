@@ -2,6 +2,7 @@ package dev.prodzeus.jarvis.member;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.configuration.Roles;
+import dev.prodzeus.jarvis.enums.MemberCredentials;
 import dev.prodzeus.jarvis.games.count.CountLevel;
 import dev.prodzeus.jarvis.listeners.Levels;
 import net.dv8tion.jda.api.entities.Member;
@@ -32,8 +33,8 @@ public class CollectiveMember implements Formattable {
     private boolean isActive = false;
     private CountLevel countLevel = CountLevel.LEVEL_0;
     private long nextCountLevelRequirement = countLevel.requirement;
-    private Set<Long> reactionsGiven = new HashSet<>();
-    private Set<Long> reactionsReceived = new HashSet<>();
+    private final Set<Long> reactionsGiven = new HashSet<>();
+    private final Set<Long> reactionsReceived = new HashSet<>();
 
     public enum MemberData {
         LEVEL, EXPERIENCE,
@@ -45,7 +46,7 @@ public class CollectiveMember implements Formattable {
         this.id = id;
         this.server = server;
         this.mention = "<@"+id+">";
-        data = Jarvis.DATABASE.loadMember(server,id);
+        data = Jarvis.DATABASE.loadMember(new MemberCredentials(server,id));
 
         LOGGER.debug("[Server:{}] [Member:{}] New Collective Member instance created.",server,id);
         validate();
@@ -85,6 +86,10 @@ public class CollectiveMember implements Formattable {
         try {
             LOGGER.debug("[Server:{}] [Member:{}] Repairing level roles...",server,id);
             final Member member = getMember();
+            if (member == null) {
+                LOGGER.warn("[Server:{}] [Member:{}] Failed to repair level roles. Member is null!" ,server,id);
+                return;
+            }
             for (final Role role : member.getRoles()) {
                 if (role.getName().toLowerCase().contains("level")) removeRole(role.getIdLong());
             }

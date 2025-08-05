@@ -152,6 +152,7 @@ public final class CountGameData extends GameData {
     }
 
     public void resetPlayers() {
+        logger.trace("Resetting players...");
         synchronized (players) {
             players.clear();
         }
@@ -164,7 +165,7 @@ public final class CountGameData extends GameData {
 
     @Override
     public void save() {
-        if (highscoreAnnounced) channel.getManager().setTopic("Server Highscore: " + currentNumber).queue();
+        if (highscoreAnnounced) channel.getManager().setTopic("Server Highscore: " + currentNumber).queue(null,null);
         Jarvis.DATABASE.saveCountGameData(this);
         logger.info("Count data saved to database.");
     }
