@@ -5,7 +5,6 @@ import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -14,8 +13,10 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static dev.prodzeus.jarvis.bot.Jarvis.*;
+import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
+import static dev.prodzeus.jarvis.bot.Jarvis.getEmojiFormatted;
 import static dev.prodzeus.jarvis.games.count.CountGameHandler.formatPercentage;
+import static dev.prodzeus.jarvis.utility.Util.isValidMessageEvent;
 
 public class CountGame extends ListenerAdapter {
 
@@ -42,10 +43,7 @@ public class CountGame extends ListenerAdapter {
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent event) {
         try {
-            if (event.getAuthor().isBot()
-                || event.getAuthor().isSystem()
-                || event.getChannel().getIdLong() != data.channelId
-                || event.isWebhookMessage()) return;
+            if (!isValidMessageEvent(event)) return;
 
             final Integer countedNumber = getCountedNumber(event.getMessage(), event.getAuthor().getIdLong());
             if (countedNumber == null) return;

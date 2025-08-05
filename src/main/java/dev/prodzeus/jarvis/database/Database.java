@@ -9,19 +9,20 @@ import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
 import lombok.SneakyThrows;
-import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class Database {
 
     private Connection connection;
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Collective Database");
+    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Database");
 
     private static final Map<String, String> ENV = System.getenv();
     private static final String DB_HOST = ENV.getOrDefault("DB_HOST", "None.");

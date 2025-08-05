@@ -25,12 +25,19 @@ public class CommandHandler extends ListenerAdapter {
     private static final Logger LOGGER = SLF4JProvider.get().getLogger("Commands");
 
     public CommandHandler() {
-        //registerCommands();
+        if (System.getenv().getOrDefault("UPDATE_COMMANDS","FALSE").equalsIgnoreCase("TRUE")) registerCommands();
     }
 
     @Override
     public synchronized void onSlashCommandInteraction(@NotNull final SlashCommandInteractionEvent event) {
-        if (event.isFromGuild() && !event.isAcknowledged()) sendAck(event);
+        if (event.isFromGuild() && !event.isAcknowledged()) {
+            if (event.getMember().hasPermission(Permission.ADMINISTRATOR)) sendAck(event);
+            else {
+                LOGGER.trace("[Member:{}] Access denied!", event.getMember().getIdLong());
+                event.getInteraction().reply(Jarvis.getEmojiFormatted("circle_failed") + " **Permission denied!**").setEphemeral(true).queue();
+                return;
+            }
+        }
         else {
             LOGGER.error("[Server:{}] Failed to handle command!",event.getGuild().getIdLong());
             event.reply("Error occurred during command completion!").setEphemeral(true).setSuppressedNotifications(true).queue();
