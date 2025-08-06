@@ -4,6 +4,7 @@ import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
 import dev.prodzeus.logger.Logger;
+import dev.prodzeus.logger.Marker;
 import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -13,22 +14,23 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
 import static dev.prodzeus.jarvis.bot.Jarvis.getEmojiFormatted;
 import static dev.prodzeus.jarvis.games.count.CountGameHandler.formatPercentage;
 import static dev.prodzeus.jarvis.utility.Util.isValidMessageEvent;
+import static dev.prodzeus.jarvis.utility.Util.sendMessage;
 
 public class CountGame extends ListenerAdapter {
 
-    private final Logger logger;
+    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Count");
+    private final Marker marker;
 
     private final CountGameData data;
     private static final String correctCountString = "### %s **%d** %s\n-# %s •  %s **%d**  %s **%d**  •  %s";
 
     public CountGame(final long serverId) {
-        logger = SLF4JProvider.get().getLogger("Count:" + serverId);
         this.data = Jarvis.DATABASE.getCountGameData(serverId);
-        if (data == null) logger.debug("Aborting creation of new game instance...");
+        this.marker = SLF4JProvider.get().getMarkerFactory().getMarker(String.valueOf(serverId));
+        if (data == null) LOGGER.debug(marker,"Aborting creation of new game instance...");
         else CountGameHandler.addGame(serverId, this);
     }
 
@@ -42,74 +44,42 @@ public class CountGame extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent event) {
-        try {
-            if (event.getChannel().getIdLong() != data.channelId || !isValidMessageEvent(event)) return;
+        if (event.getChannel().getIdLong() != data.channelId) return;
+        deleteMessage(event.getMessage());
+        if (!isValidMessageEvent(event)) return;
 
-            final Integer countedNumber = getCountedNumber(event.getMessage(), event.getAuthor().getIdLong());
-            if (countedNumber == null) return;
+        final long memberId = event.getAuthor().getIdLong();
+        final Integer countedNumber = getCountedNumber(event.getMessage(), memberId);
+        if (countedNumber == null) return;
 
-            String text;
-            if (data.handleCount(event, countedNumber)) {
-                deleteWarningMessage();
-                final String streak = computeStreak(event) ? " " + CountGameHandler.streak : "";
-                final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(data.serverId, event.getAuthor().getIdLong());
-                text = correctCountString.formatted(collectiveMember.mention, countedNumber,
-                        data.highscoreAnnounced ? CountGameHandler.trophy : streak,
-                        streak.isEmpty() ? collectiveMember.getCountLevelIcon() : (data.highscoreAnnounced ? streak : ""),
-                        CountGameHandler.correctCountEmoji, collectiveMember.getData(CollectiveMember.MemberData.CORRECT_COUNTS),
-                        CountGameHandler.incorrectCountEmoji, collectiveMember.getData(CollectiveMember.MemberData.INCORRECT_COUNTS),
-                        CountGameHandler.beta);
-            } else {
-                //if (currentNumber == 1) return;
-                final FinishedGameStats gameStats = data.getGameStats();
-                prepareNextGame();
-                StringBuilder builder = new StringBuilder();
-                builder.append("# Game Over ")
-                        .append(getEmojiFormatted("lightning")).append(" \n")
-                        .append((data.highscoreAnnounced ? "New Highscore" : "Score"))
-                        .append(": **").append(gameStats.count).append("** ")
-                        .append((data.highscoreAnnounced ? CountGameHandler.trophy : ""))
-                        .append("\n-# Ended by: <@").append(data.latestPlayer).append("> | __-25xp penalty__")
-                        .append("\n## Leaderboard").append(Jarvis.getEmojiFormatted("rocket"));
-                CountPlayer player;
-                for (int i = 1; i < 4; i++) {
-                    builder.append("\n").append(i).append(". **");
-                    player = gameStats.getNext();
-                    if (player == null) builder.append("N/A** *0xp* \n -# **0 Counts | 0%**");
-                    else {
-                        builder.append("<@").append(player.id).append(">** *")
-                                .append(player.experienceGained)
-                                .append("xp* \n -# **").append(player.counts).append(" Counts | ")
-                                .append(formatPercentage(gameStats.count, player.counts))
-                                .append("%**");
-                    }
-                }
-                text = builder.toString();
-            }
-            try {
-                data.channel.sendMessage(text)
-                        .queue(s -> logger.trace("New message sent in count."),
-                                f -> logger.error("Failed to send game message in count! {}", f));
-            } catch (Exception e) {
-                logger.error("Failed to send game message in count! {}", e);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to handle MessageReceivedEvent! {}", e);
+        String text;
+        if (data.handleCount(event, countedNumber)) {
+            deleteWarningMessage();
+            final String streak = computeStreak(event) ? " " + CountGameHandler.streak : "";
+            final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(data.serverId, memberId);
+            text = correctCountString.formatted(collectiveMember.mention, countedNumber,
+                    data.highscoreAnnounced ? CountGameHandler.trophy : streak,
+                    streak.isEmpty() ? collectiveMember.getCountLevelIcon() : (data.highscoreAnnounced ? streak : ""),
+                    CountGameHandler.correctCountEmoji, collectiveMember.getData(CollectiveMember.MemberData.CORRECT_COUNTS),
+                    CountGameHandler.incorrectCountEmoji, collectiveMember.getData(CollectiveMember.MemberData.INCORRECT_COUNTS),
+                    CountGameHandler.beta);
+        } else {
+            text = getEndOfGameMessage();
+            prepareNextGame();
         }
+        sendMessage(data.channel,text);
     }
 
     private Integer getCountedNumber(@NotNull final Message message, final long memberId) {
-        deleteMessage(message);
-
         int countedNumber;
         try {
-            logger.trace("Checking for integer...");
+            LOGGER.trace(marker,"Checking for integer...");
             countedNumber = Integer.parseInt(message.getContentRaw(), 10);
         } catch (Exception e) {
-            if (!(e instanceof NumberFormatException)) logger.warn("Failed to parse message to Integer! {}", e);
+            if (!(e instanceof NumberFormatException)) LOGGER.warn(marker,"Failed to parse message to Integer! {}", e);
             return null;
         }
-        logger.trace("Integer {} found.", countedNumber);
+        LOGGER.trace(marker,"Integer {} found.", countedNumber);
 
         return canPlay(memberId) ? countedNumber : null;
     }
@@ -118,14 +88,14 @@ public class CountGame extends ListenerAdapter {
         if (data.latestPlayer != id) return true;
         else {
             if (warningMessage == 0L) {
-                logger.trace("Double count performed by player: {}", id);
+                LOGGER.trace(marker,"Double count performed by player: {}", id);
                 data.channel.sendMessage("%s You can't count twice in a row!".formatted(getEmojiFormatted("red_exclamation")))
                         .queue(s -> {
                             warningMessage = s.getIdLong();
-                            logger.trace("Sending new warning message...");
+                            LOGGER.trace(marker,"Sending new warning message...");
                             s.delete().queueAfter(10, TimeUnit.SECONDS, x -> {
                                 warningMessage = 0L;
-                                logger.trace("Warning message deleted, due to time constraint.");
+                                LOGGER.trace(marker,"Warning message deleted, due to time constraint.");
                             });
                         });
             }
@@ -137,23 +107,23 @@ public class CountGame extends ListenerAdapter {
 
     private synchronized void deleteWarningMessage() {
         try {
-            logger.trace("Deleting warning message...");
+            LOGGER.trace(marker,"Deleting warning message...");
             if (warningMessage != 0L) {
                 data.channel.deleteMessageById(warningMessage).queue(x -> {
-                            logger.trace("Warning message deleted.");
+                            LOGGER.trace(marker,"Warning message deleted.");
                             warningMessage = 0L;
                         },
-                        f -> logger.trace("Failed to delete warning message. {}", f));
+                        f -> LOGGER.trace(marker,"Failed to delete warning message. {}", f));
             }
         } catch (Exception e) {
-            logger.error("Failed to delete warning message! {}", e);
+            LOGGER.error(marker,"Failed to delete warning message! {}", e);
         }
     }
 
     private final Map<Long, List<Long>> playerStreaks = new HashMap<>();
 
     private boolean computeStreak(@NotNull final MessageReceivedEvent event) {
-        logger.trace("Computing streak for player: {}", event.getAuthor().getIdLong());
+        LOGGER.trace(marker,"Computing streak for player: {}", event.getAuthor().getIdLong());
         final List<Long> times = playerStreaks.computeIfAbsent(event.getAuthor().getIdLong(), k -> new ArrayList<>());
         final long createdAt = event.getMessage().getTimeCreated().toEpochSecond();
         times.add(createdAt);
@@ -164,14 +134,40 @@ public class CountGame extends ListenerAdapter {
     }
 
     private void deleteMessage(@NotNull final Message message) {
-        logger.trace("Deleting new message in Count...");
+        LOGGER.trace(marker,"Deleting new message in Count...");
         try {
             message.delete().queueAfter(300, TimeUnit.MILLISECONDS,
-                    s -> logger.trace("New message in Count deleted."),
-                    f -> logger.warn("Failed to delete message in count channel! {}", f));
+                    s -> LOGGER.trace(marker,"New message in Count deleted."),
+                    f -> LOGGER.warn(marker,"Failed to delete message in count channel! {}", f));
         } catch (Exception e) {
-            logger.warn("Failed to delete message in count channel! {}", e);
+            LOGGER.warn(marker,"Failed to delete message in count channel! {}", e);
         }
+    }
+
+    private String getEndOfGameMessage() {
+        final FinishedGameStats gameStats = data.getGameStats();
+        StringBuilder builder = new StringBuilder();
+        builder.append("# Game Over ")
+                .append(getEmojiFormatted("lightning")).append(" \n")
+                .append((data.highscoreAnnounced ? "New Highscore" : "Score"))
+                .append(": **").append(gameStats.count).append("** ")
+                .append((data.highscoreAnnounced ? CountGameHandler.trophy : ""))
+                .append("\n-# Ended by: <@").append(data.latestPlayer).append("> | __-25xp penalty__")
+                .append("\n## Leaderboard").append(Jarvis.getEmojiFormatted("rocket"));
+        CountPlayer player;
+        for (int i = 1; i < 4; i++) {
+            builder.append("\n").append(i).append(". **");
+            player = gameStats.getNext();
+            if (player == null) builder.append("N/A** *0xp* \n -# **0 Counts | 0%**");
+            else {
+                builder.append("<@").append(player.id).append(">** *")
+                        .append(player.experienceGained)
+                        .append("xp* \n -# **").append(player.counts).append(" Counts | ")
+                        .append(formatPercentage(gameStats.count, player.counts))
+                        .append("%**");
+            }
+        }
+        return builder.toString();
     }
 
     public static long calculateExperienceEarned(final int currentNumber, final int leaderboardRank, final int counts, final boolean wrongCount) {
