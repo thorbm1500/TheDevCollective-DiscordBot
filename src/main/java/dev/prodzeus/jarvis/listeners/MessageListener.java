@@ -12,7 +12,7 @@ import static dev.prodzeus.jarvis.utility.Util.isValidMessageEvent;
 
 public class MessageListener extends ListenerAdapter {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Messages");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Messages");
 
     public MessageListener() {}
 

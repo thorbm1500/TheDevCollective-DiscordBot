@@ -2,6 +2,7 @@ package dev.prodzeus.jarvis.utility;
 
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
+import lombok.SneakyThrows;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -11,8 +12,9 @@ import java.util.concurrent.TimeUnit;
 
 public class Util {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Utilities");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Utilities");
 
+    @SneakyThrows
     public static boolean isValidMessageEvent(@NotNull MessageReceivedEvent event) {
         final User user = event.getAuthor();
         return !(user.isBot() || user.isSystem() || event.isWebhookMessage() || event.getMessage().getContentRaw().length() > 2000);

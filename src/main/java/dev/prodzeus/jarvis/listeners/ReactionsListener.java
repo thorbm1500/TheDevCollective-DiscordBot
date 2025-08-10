@@ -10,7 +10,7 @@ import org.jetbrains.annotations.NotNull;
 
 public class ReactionsListener extends ListenerAdapter {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Reactions");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Reactions");
 
     public ReactionsListener() {}
 

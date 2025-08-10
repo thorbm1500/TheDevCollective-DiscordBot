@@ -6,11 +6,11 @@ plugins {
 
 repositories {
     mavenCentral()
-    maven { url = uri('https://jitpack.io') }
+    maven { url = uri('https://repo.prodzeus.dev/releases') }
 }
 
 dependencies {
-    implementation 'com.github.thorbm1500:Logger:87e128d406'
+    implementation 'dev.prodzeus:logger:1.0.1'
     implementation 'com.mysql:mysql-connector-j:9.3.0'
     implementation 'net.dv8tion:JDA:6.0.0-rc.2'
     compileOnly 'org.projectlombok:lombok:1.18.38'

@@ -23,7 +23,7 @@ import java.util.*;
 public class Database {
 
     private Connection connection;
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Database");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Database");
 
     private static final Map<String, String> ENV = System.getenv();
     private static final String DB_HOST = ENV.getOrDefault("DB_HOST", "None.");
@@ -323,12 +323,12 @@ public class Database {
         LOGGER.debug("[Server:{}] [Member:{}] Saving data...", member.server, member.id);
         try (var statement = connection.prepareStatement("UPDATE `members` SET ?=? WHERE `member_id`=? AND `server_id`=?")) {
             connection.setAutoCommit(false);
-            statement.setLong(3, member.id);
-            statement.setLong(4, member.server);
-
             for (final Map.Entry<CollectiveMember.MemberData,Long> index : member.getCurrentData().entrySet()) {
-                statement.setString(1, index.getKey().toString());
-                statement.setLong(2, index.getValue());
+                statement.setString(1, index.getKey().toString().toLowerCase());
+                if (index.getKey() == CollectiveMember.MemberData.EXPERIENCE) statement.setLong(2, index.getValue());
+                else statement.setInt(2, Integer.parseInt(index.getValue().toString()));
+                statement.setLong(3, member.id);
+                statement.setLong(4, member.server);
                 statement.addBatch();
                 LOGGER.trace("[Server:{}] [Member:{}] '{}' added to batch.", member.server, member.id, index.getKey().toString());
             }
@@ -337,6 +337,7 @@ public class Database {
             connection.commit();
             LOGGER.debug("[Server:{}] [Member:{}] Data saved.", member.server, member.id);
         } catch (Exception e) {
+            connection.rollback();
             LOGGER.error("[Server:{}] [Member:{}] Failed to save data. {}", member.server, member.id, e);
         } finally {
             connection.setAutoCommit(true);

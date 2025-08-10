@@ -2,6 +2,7 @@ package dev.prodzeus.jarvis.games.count;
 
 import dev.prodzeus.jarvis.bot.Jarvis;
 import dev.prodzeus.logger.Logger;
+import dev.prodzeus.logger.Marker;
 import dev.prodzeus.logger.SLF4JProvider;
 import net.dv8tion.jda.api.entities.Guild;
 import org.jetbrains.annotations.NotNull;
@@ -12,7 +13,8 @@ import java.util.Map;
 
 public class CountGameHandler {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("GameHandler:Count");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("GameHandler");
+    private static final Marker MARKER = SLF4JProvider.get().getMarkerFactory().getMarker("Count");
 
     private static final Map<Long, CountGame> games = new HashMap<>();
     public static final String gameOverText = getGameOverText();
@@ -37,9 +39,11 @@ public class CountGameHandler {
     public static void addGame(final long id, @NotNull final CountGame game) {
         try {
             Jarvis.jda().addEventListener(game);
+            LOGGER.trace(MARKER,"[Server:{}] Listener registered.", id);
             games.put(id, game);
+            LOGGER.debug(MARKER,"[Server:{}] New game registered.", id);
         } catch (Exception e) {
-            LOGGER.warn("[Server:{}] [Game:Count] Failed to register new game! {}", id, e);
+            LOGGER.warn(MARKER,"[Server:{}] Failed to register new game. {}", id, e);
         }
     }
 
@@ -47,7 +51,7 @@ public class CountGameHandler {
         try {
             Jarvis.jda().removeEventListener(games.remove(id));
         } catch (Exception e) {
-            LOGGER.warn("[Server:{}] [Game:Count] Failed to unregister game! {}", id, e);
+            LOGGER.warn(MARKER,"[Server:{}] Failed to unregister game! {}", id, e);
         }
     }
 
@@ -73,17 +77,17 @@ public class CountGameHandler {
     }
 
     public void shutdown() {
-        LOGGER.info("Executing shutdown procedure...");
+        LOGGER.info(MARKER,"Executing shutdown procedure...");
         if (games.isEmpty()) return;
-        try {
-            final Iterator<CountGame> iterator = games.values().iterator();
-            while (iterator.hasNext()) {
+        final Iterator<CountGame> iterator = games.values().iterator();
+        while (iterator.hasNext()) {
+            try {
                 final CountGame game = iterator.next();
                 if (game != null) game.shutdown();
                 iterator.remove();
+            } catch (Exception e) {
+                LOGGER.error(MARKER,"Exception thrown during shutdown procedure! {}", e);
             }
-        } catch (Exception e) {
-            LOGGER.error("Exception thrown during shutdown procedure! {}", e);
         }
     }
 }

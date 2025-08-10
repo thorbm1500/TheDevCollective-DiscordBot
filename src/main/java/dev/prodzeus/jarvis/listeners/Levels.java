@@ -23,7 +23,7 @@ import static dev.prodzeus.jarvis.utility.Util.isValidMessageEvent;
 
 public final class Levels extends ListenerAdapter {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Levels");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Levels");
 
     private static final Pattern regex = Pattern.compile(":[^\\s:][^:]*?:");
     private static final List<Long> levels;
@@ -61,7 +61,7 @@ public final class Levels extends ListenerAdapter {
         if (!isValidMessageEvent(e)) return;
 
         final long guildId = e.getGuild().getIdLong();
-        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(e.getAuthor().getIdLong(), guildId);
+        final CollectiveMember collectiveMember = MemberManager.getCollectiveMember(guildId, e.getAuthor().getIdLong());
         if (collectiveMember.hasExperienceCooldown()) return;
 
         final String content = e.getMessage().getContentRaw().toLowerCase();

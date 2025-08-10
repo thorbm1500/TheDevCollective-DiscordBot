@@ -5,9 +5,10 @@ import dev.prodzeus.jarvis.database.Database;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.listeners.LogListener;
 import dev.prodzeus.jarvis.member.MemberManager;
-import dev.prodzeus.logger.Level;
+import dev.prodzeus.logger.Listener;
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
+import dev.prodzeus.logger.components.Level;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
@@ -21,8 +22,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public class Jarvis {
 
@@ -31,6 +30,7 @@ public class Jarvis {
     public static final Bot BOT;
     private static final Set<Runnable> shutdownHooks = new HashSet<>();
     private static final Set<Guild> guilds = new HashSet<>();
+    private static Listener discordLogSink;
 
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(Jarvis::shutdown));
@@ -44,7 +44,6 @@ public class Jarvis {
 
     public static void main(String[] args) {
         new MemberManager();
-        Executors.newScheduledThreadPool(1).schedule(() -> BOT.jda.getGuildCache().forEach(guild -> System.out.println(guild.getIdLong())),30, TimeUnit.SECONDS);
     }
 
     public static void registerShutdownHook(@NotNull final Runnable runnable) {
@@ -54,7 +53,7 @@ public class Jarvis {
 
     @SneakyThrows
     public static synchronized void shutdown() {
-        SLF4JProvider.get().getEventManager().unregisterAll(LOGGER);
+        discordLogSink.destroy();
         LOGGER.info("JDA disconnected. Jarvis shutting down...");
         try {
             shutdownHooks.forEach(Runnable::run);
@@ -78,7 +77,7 @@ public class Jarvis {
         for (final Guild guild : jda().getGuilds()) {
             final TextChannel channel = Channels.getChannel(guild.getIdLong(), Channels.DevChannel.LOG);
             if (channel != null) {
-                Jarvis.getSLF4J().registerListener(new LogListener(channel), logger);
+                discordLogSink = new LogListener(channel).register();
                 channel.sendMessage("%s **Enabled**\n-# Since: <t:%d:R>"
                                 .formatted(getEmojiFormatted("status_green"), (System.currentTimeMillis() / 1000)))
                         .queue(null, f -> logger.error("Failed to send 'Online' message to Log Channel!"));

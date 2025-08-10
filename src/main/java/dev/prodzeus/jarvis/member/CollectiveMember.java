@@ -42,7 +42,7 @@ public class CollectiveMember implements Formattable {
         IMAGES_SENT, REACTIONS_GIVEN, REACTIONS_RECEIVED
     }
 
-    public CollectiveMember(final long id, final long server) {
+    public CollectiveMember(final long server, final long id) {
         this.id = id;
         this.server = server;
         this.mention = "<@"+id+">";

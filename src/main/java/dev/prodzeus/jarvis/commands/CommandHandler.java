@@ -22,7 +22,7 @@ import static net.dv8tion.jda.api.interactions.commands.OptionType.*;
 
 public class CommandHandler extends ListenerAdapter {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Commands");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Commands");
 
     public CommandHandler() {
         if (System.getenv().getOrDefault("UPDATE_COMMANDS","FALSE").equalsIgnoreCase("TRUE")) registerCommands();

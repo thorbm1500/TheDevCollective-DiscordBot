@@ -5,18 +5,20 @@ import dev.prodzeus.jarvis.games.components.GameData;
 import dev.prodzeus.jarvis.member.CollectiveMember;
 import dev.prodzeus.jarvis.member.MemberManager;
 import dev.prodzeus.logger.Logger;
-import dev.prodzeus.logger.Marker;
 import dev.prodzeus.logger.SLF4JProvider;
+import lombok.SneakyThrows;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.exceptions.ErrorResponseException;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Marker;
 
 import java.util.Collection;
 import java.util.HashMap;
 
 public final class CountGameData extends GameData {
 
-    private static final Logger logger = SLF4JProvider.get().getLogger("Count");
+    private static final Logger logger = SLF4JProvider.get().getLoggerFactory().getLogger("Count");
     private final Marker marker;
 
     public long latestPlayer;
@@ -60,6 +62,8 @@ public final class CountGameData extends GameData {
                         .queue(s -> logger.trace(marker,"Previous sync message deleted."),
                                 f -> logger.debug(marker,"Previous sync message failed to delete."));
                 previousSync = 0;
+            } catch (ErrorResponseException e) {
+                logger.info(marker,"Failed to delete previous sync message! {}  ", e);
             } catch (Exception e) {
                 logger.error(marker,"Failed to delete previous sync message! {}  ", e);
             }
@@ -98,19 +102,20 @@ public final class CountGameData extends GameData {
         } else {
             logger.trace(marker,"Creating new Count Player.");
             final CountPlayer player = new CountPlayer(serverId, id);
+            var value = players.put(id, player);
             synchronized (players) {
-                logger.trace(marker,"New Count Player cached. Previous value connected to ID: {}", players.put(id, player));
+                logger.trace(marker,"New Count Player cached. Previous value connected to ID: {}", value == null ? "null" : value);
             }
             return player;
         }
     }
 
-    @Contract(pure = true)
+    @SneakyThrows @Contract(pure = true)
     public synchronized boolean handleCount(@NotNull final MessageReceivedEvent event, final int counted) {
+        latestPlayer = event.getAuthor().getIdLong();
+        deleteCurrentSyncMessage();
         if (counted == currentNumber) {
-            latestPlayer = event.getAuthor().getIdLong();
-            logger.trace(marker,"Player: {} | Count: {} | Correct: True",latestPlayer,counted);
-            deleteCurrentSyncMessage();
+            logger.trace(marker,"[Member:{}] {} | Correct",latestPlayer,counted);
             if (currentNumber > highscore && !highscoreAnnounced) {
                 highscoreAnnounced = true;
                 channel.sendMessage(CountGameHandler.newHighscoreText.formatted(event.getAuthor().getAsMention(), currentNumber, highscore, highscoreEpoch)).queue();
@@ -118,10 +123,10 @@ public final class CountGameData extends GameData {
                 highscoreEpoch = event.getMessage().getTimeCreated().toEpochSecond();
             }
             incrementCount();
-            logger.trace(marker,"Next Number: {}", ++currentNumber);
+            logger.trace(marker,"Next Number: {}", currentNumber);
             return true;
         } else {
-            logger.trace(marker,"Player: {} | Count: {} | Correct: False",latestPlayer,counted);
+            logger.trace(marker,"[Member:{}] {} | Incorrect",latestPlayer,counted);
             getPlayer(latestPlayer).wrongCount = true;
             MemberManager.getCollectiveMember(serverId, latestPlayer).increment(CollectiveMember.MemberData.INCORRECT_COUNTS);
             return false;
@@ -129,6 +134,7 @@ public final class CountGameData extends GameData {
     }
 
     private void incrementCount() {
+        currentNumber++;
         getPlayer(latestPlayer).incrementCount();
         MemberManager.getCollectiveMember(serverId, latestPlayer).increment(CollectiveMember.MemberData.CORRECT_COUNTS);
         logger.trace(marker,"Collective Member Count incremented: {}", latestPlayer);

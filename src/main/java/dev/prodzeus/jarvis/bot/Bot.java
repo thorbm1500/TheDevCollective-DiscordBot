@@ -1,15 +1,15 @@
 package dev.prodzeus.jarvis.bot;
 
-import dev.prodzeus.jarvis.commands.CommandHandler;
 import dev.prodzeus.jarvis.enums.CachedEmoji;
 import dev.prodzeus.jarvis.games.count.CountGameHandler;
-import dev.prodzeus.jarvis.listeners.*;
 import lombok.SneakyThrows;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Icon;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.emoji.ApplicationEmoji;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -24,8 +24,7 @@ import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-import static dev.prodzeus.jarvis.bot.Jarvis.LOGGER;
-import static dev.prodzeus.jarvis.bot.Jarvis.registerDiscordConsumers;
+import static dev.prodzeus.jarvis.bot.Jarvis.*;
 
 public class Bot {
 
@@ -63,6 +62,13 @@ public class Bot {
         loadEmojis();
         registerDiscordConsumers(LOGGER);
         registerListeners();
+        if (System.getenv().getOrDefault("VALIDATE_MEMBERS","FALSE").equalsIgnoreCase("TRUE")) {
+            for (final Guild guild : jda.getGuilds()) {
+                for (final Member member : guild.getMembers()) {
+                    DATABASE.addMember(member);
+                }
+            }
+        }
         LOGGER.debug("Loading done.");
     }
 
@@ -166,13 +172,13 @@ public class Bot {
 
     private void registerListeners() {
         LOGGER.debug("Registering Event Listeners.");
-        jda.addEventListener(new GuildListener());
+        /*jda.addEventListener(new GuildListener());
         jda.addEventListener(new CommandHandler());
 
         jda.addEventListener(new MessageListener());
         jda.addEventListener(new ImageListener());
         jda.addEventListener(new ReactionsListener());
-        jda.addEventListener(new Levels());
+        jda.addEventListener(new Levels());*/
         new CountGameHandler();
     }
 

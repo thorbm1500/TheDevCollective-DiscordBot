@@ -21,7 +21,7 @@ import static dev.prodzeus.jarvis.utility.Util.sendMessage;
 
 public class CountGame extends ListenerAdapter {
 
-    private static final Logger LOGGER = SLF4JProvider.get().getLogger("Count");
+    private static final Logger LOGGER = SLF4JProvider.get().getLoggerFactory().getLogger("Count");
     private final Marker marker;
 
     private final CountGameData data;
@@ -45,12 +45,17 @@ public class CountGame extends ListenerAdapter {
     @Override
     public void onMessageReceived(@NotNull final MessageReceivedEvent event) {
         if (event.getChannel().getIdLong() != data.channelId) return;
-        deleteMessage(event.getMessage());
         if (!isValidMessageEvent(event)) return;
+        deleteMessage(event.getMessage());
 
         final long memberId = event.getAuthor().getIdLong();
+
         final Integer countedNumber = getCountedNumber(event.getMessage(), memberId);
-        if (countedNumber == null) return;
+        if (countedNumber != null) LOGGER.debug(marker,"Counted number: {}", countedNumber);
+        else {
+            LOGGER.debug(marker,"Not an integer. Ignoring.");
+            return;
+        }
 
         String text;
         if (data.handleCount(event, countedNumber)) {
