@@ -316,31 +316,34 @@ public class Database {
         return data;
     }
 
-    @SneakyThrows
     public void saveMember(@NotNull final CollectiveMember member) {
-        addMember(new MemberCredentials(member.server,member.id));
+        addMember(new MemberCredentials(member.server, member.id));
         if (!reconnect("saveMember")) return;
         LOGGER.debug("[Server:{}] [Member:{}] Saving data...", member.server, member.id);
-        try (var statement = connection.prepareStatement("UPDATE `members` SET ?=? WHERE `member_id`=? AND `server_id`=?")) {
-            connection.setAutoCommit(false);
-            for (final Map.Entry<CollectiveMember.MemberData,Long> index : member.getCurrentData().entrySet()) {
-                statement.setString(1, index.getKey().toString().toLowerCase());
-                if (index.getKey() == CollectiveMember.MemberData.EXPERIENCE) statement.setLong(2, index.getValue());
-                else statement.setInt(2, Integer.parseInt(index.getValue().toString()));
-                statement.setLong(3, member.id);
-                statement.setLong(4, member.server);
-                statement.addBatch();
-                LOGGER.trace("[Server:{}] [Member:{}] '{}' added to batch.", member.server, member.id, index.getKey().toString());
-            }
-            statement.executeBatch();
-            LOGGER.trace("[Server:{}] [Member:{}] Batch executed.", member.server, member.id);
-            connection.commit();
-            LOGGER.debug("[Server:{}] [Member:{}] Data saved.", member.server, member.id);
+        try (var statement = connection.prepareStatement("""
+                UPDATE `members`
+                SET `level`=?,
+                    `experience`=?,
+                    `correct_counts`=?,
+                    `incorrect_counts`=?,
+                    `images_sent`=?,
+                    `reactions_given`=?,
+                    `reactions_received`=?
+                WHERE `member_id`=? AND `server_id`=?
+                """)) {
+            statement.setInt(1, (int) member.getData(CollectiveMember.MemberData.LEVEL));
+            statement.setLong(2, member.getData(CollectiveMember.MemberData.EXPERIENCE));
+            statement.setInt(3, (int) member.getData(CollectiveMember.MemberData.CORRECT_COUNTS));
+            statement.setInt(4, (int) member.getData(CollectiveMember.MemberData.INCORRECT_COUNTS));
+            statement.setInt(5, (int) member.getData(CollectiveMember.MemberData.IMAGES_SENT));
+            statement.setInt(6, (int) member.getData(CollectiveMember.MemberData.REACTIONS_GIVEN));
+            statement.setInt(7, (int) member.getData(CollectiveMember.MemberData.REACTIONS_RECEIVED));
+            statement.setLong(8, member.id);
+            statement.setLong(9, member.server);
+            final int result = statement.executeUpdate();
+            LOGGER.debug("[Server:{}] [Member:{}] {}", member.server, member.id, (result == 1 ? "Data successfully saved" : "Data saved. No changes made."));
         } catch (Exception e) {
-            connection.rollback();
             LOGGER.error("[Server:{}] [Member:{}] Failed to save data. {}", member.server, member.id, e);
-        } finally {
-            connection.setAutoCommit(true);
         }
     }
 
