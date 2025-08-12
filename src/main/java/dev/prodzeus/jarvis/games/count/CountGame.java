@@ -142,10 +142,9 @@ public class CountGame extends ListenerAdapter {
         LOGGER.trace(marker,"Deleting new message in Count...");
         try {
             message.delete().queueAfter(300, TimeUnit.MILLISECONDS,
-                    s -> LOGGER.trace(marker,"New message in Count deleted."),
-                    f -> LOGGER.warn(marker,"Failed to delete message in count channel! {}", f));
+                    s -> LOGGER.trace(marker,"New message in Count deleted."));
         } catch (Exception e) {
-            LOGGER.warn(marker,"Failed to delete message in count channel! {}", e);
+            LOGGER.error(marker,"Failed to delete message in count channel! {}", e);
         }
     }
 

@@ -7,6 +7,7 @@ import dev.prodzeus.jarvis.member.MemberManager;
 import dev.prodzeus.logger.Logger;
 import dev.prodzeus.logger.SLF4JProvider;
 import lombok.SneakyThrows;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
 import org.jetbrains.annotations.Contract;
@@ -29,8 +30,8 @@ public final class CountGameData extends GameData {
     public int highscore;
     public long highscoreEpoch;
 
-    private long previousSync;
-    private long currentSync = 0;
+    private volatile long previousSync;
+    private volatile long currentSync = 0;
 
     public long getSyncMessageId() {
         return currentSync;
@@ -57,37 +58,35 @@ public final class CountGameData extends GameData {
         if (previousSync != 0) {
             logger.trace(marker,"Deleting previous sync message: {}...", previousSync);
             try {
-                channel.deleteMessageById(previousSync)
-                        .reason("Deleting previous Sync Message before sending new Sync Message.")
-                        .queue(s -> logger.trace(marker,"Previous sync message deleted."),
-                                f -> logger.debug(marker,"Previous sync message failed to delete."));
+                final Message message = channel.getHistory().getMessageById(previousSync);
+                if (message == null) return;
+                logger.debug(marker,"Deleting current sync message: {}...", currentSync);
+                message.delete().reason("Deleting current sync message.").queue();
                 previousSync = 0;
             } catch (ErrorResponseException e) {
-                logger.info(marker,"Failed to delete previous sync message! {}  ", e);
-            } catch (Exception e) {
-                logger.error(marker,"Failed to delete previous sync message! {}  ", e);
+                logger.debug(marker,"Previous sync message failed to delete. {}", e.getMeaning());
             }
         }
         logger.trace(marker,"Sending new sync message...");
         try {
             channel.sendMessage("## %s Game Sync\nNext number: **%d**".formatted(Jarvis.getEmojiFormatted("sync"), currentNumber))
                     .queue(s -> logger.trace(marker,"New sync message: {}", currentSync = s.getIdLong()));
-        } catch (Exception e) {
-            logger.warn(marker,"Failed to send new sync message! {}", e);
+        } catch (Exception ignored) {
+            logger.debug(marker,"Previous sync message failed to delete.");
         }
     }
 
-    private boolean queued = false;
+    private volatile boolean queued = false;
     private void deleteCurrentSyncMessage() {
         if (currentSync != 0 && !queued) {
             try {
-                logger.debug(marker,"Deleting current sync message: {}...", currentSync);
-                channel.deleteMessageById(currentSync).queue(s -> { currentSync = 0;
-                            logger.debug(marker,"Current sync message deleted."); },
-                        f -> logger.warn(marker,"Failed to delete current sync message! {}  ", f));
+                final Message message = channel.getHistory().getMessageById(currentSync);
+                if (message == null) return;
+                logger.debug(marker,"Deleting previous sync message: {}...", currentSync);
+                message.delete().reason("Deleting previous sync Message before sending new sync message.").queue();
                 queued = true;
-            } catch (Exception e) {
-                logger.warn(marker,"Failed to delete current sync message! {}  ", e);
+            } catch (Exception ignored) {
+                logger.debug(marker,"Previous sync message failed to delete.");
             }
         }
     }
